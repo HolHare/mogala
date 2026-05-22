@@ -11,16 +11,27 @@ env:
 jobs:
   build-backend:
     runs-on: self-hosted
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+<<<<<<< HEAD
       - name: Convert repo owner to lowercase
+=======
+      - name: Convert owner to lowercase
+>>>>>>> main
         run: echo "OWNER_LC=${OWNER,,}" >> $GITHUB_ENV
         env:
           OWNER: ${{ github.repository_owner }}
 
+<<<<<<< HEAD
       - name: Login to GitHub Container Registry
+=======
+      - name: Log in to GitHub Container Registry
+>>>>>>> main
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -36,16 +47,27 @@ jobs:
 
   build-frontend:
     runs-on: self-hosted
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+<<<<<<< HEAD
       - name: Convert repo owner to lowercase
+=======
+      - name: Convert owner to lowercase
+>>>>>>> main
         run: echo "OWNER_LC=${OWNER,,}" >> $GITHUB_ENV
         env:
           OWNER: ${{ github.repository_owner }}
 
+<<<<<<< HEAD
       - name: Login to GitHub Container Registry
+=======
+      - name: Log in to GitHub Container Registry
+>>>>>>> main
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
