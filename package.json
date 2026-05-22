@@ -1,13 +1,8 @@
 {
-  "name": "mogala-backend",
+  "name": "mogala-frontend",
   "version": "1.0.0",
-  "description": "Backend for VOIP SAAS",
-  "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "test": "echo \"No tests yet\""
-  },
-  "dependencies": {
-    "express": "^4.18.2"
+    "build": "echo 'Building frontend...'",
+    "start": "echo 'Starting frontend...'"
   }
 }
