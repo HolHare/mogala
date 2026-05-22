@@ -1,0 +1,17 @@
+name: Test Runner
+on:
+  push:
+    branches: [ main, backend, frontend, asterisk, kamailio ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Show system info
+        run: |
+          echo "Runner is working!"
+          uname -a
+          docker --version
