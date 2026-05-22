@@ -1,0 +1,8 @@
+{
+  "name": "mogala-frontend",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "echo 'Building frontend...'",
+    "start": "echo 'Starting frontend...'"
+  }
+}
