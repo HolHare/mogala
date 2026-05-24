@@ -17,6 +17,7 @@ services:
       - mysql
     networks:
       - mogala-net
+
   frontend:
     image: ghcr.io/holhare/mogala/frontend:latest
     container_name: mogala-frontend
@@ -27,6 +28,38 @@ services:
       - backend
     networks:
       - mogala-net
+
+  kamailio:
+    image: ghcr.io/holhare/mogala/kamailio:latest
+    container_name: mogala-kamailio
+    restart: unless-stopped
+    ports:
+      - "5060:5060/udp"
+      - "5060:5060/tcp"
+      - "5061:5061/tcp"
+    environment:
+      - DBURL=mysql://mogala_user:${MYSQL_PASSWORD}@mogala-mysql/mogala
+    depends_on:
+      - mysql
+    networks:
+      - mogala-net
+
+  asterisk:
+    image: ghcr.io/holhare/mogala/asterisk:latest
+    container_name: mogala-asterisk
+    restart: unless-stopped
+    ports:
+      - "5062:5061/udp"
+      - "5062:5061/tcp"
+      - "8088:8088/tcp"
+      - "10000-10100:10000-10100/udp"
+    environment:
+      - EXTERNAL_IP=${EXTERNAL_IP}
+    depends_on:
+      - kamailio
+    networks:
+      - mogala-net
+
   mysql:
     image: mysql:8
     container_name: mogala-mysql
@@ -42,8 +75,10 @@ services:
       - mogala-net
     ports:
       - "3306:3306"
+
 networks:
   mogala-net:
     driver: bridge
+
 volumes:
   mysql_data:
