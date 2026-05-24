@@ -12,6 +12,19 @@ import (
 	"mogala-backend/middleware"
 )
 
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	database := db.Connect()
 	defer database.Close()
@@ -19,13 +32,14 @@ func main() {
 	db.Migrate(database)
 
 	r := mux.NewRouter()
+	r.Use(corsMiddleware)
 
-	r.HandleFunc("/auth/register", handlers.Register(database)).Methods("POST")
-	r.HandleFunc("/auth/login", handlers.Login(database)).Methods("POST")
+	r.HandleFunc("/auth/register", handlers.Register(database)).Methods("POST", "OPTIONS")
+	r.HandleFunc("/auth/login", handlers.Login(database)).Methods("POST", "OPTIONS")
 
 	protected := r.PathPrefix("/api").Subrouter()
 	protected.Use(middleware.JWTAuth)
-	protected.HandleFunc("/me", handlers.Me(database)).Methods("GET")
+	protected.HandleFunc("/me", handlers.Me(database)).Methods("GET", "OPTIONS")
 
 	port := os.Getenv("PORT")
 	if port == "" {
