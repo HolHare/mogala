@@ -50,7 +50,7 @@ services:
     container_name: mogala-rtpproxy
     restart: unless-stopped
     network_mode: host
-    command: -F -s udp:127.0.0.1:7722 -l 173.249.4.136 -m 10200 -M 10400
+    command: -F -s udp:172.18.0.1:7722 -l 173.249.4.136 -m 10200 -M 10400
 
   asterisk:
     image: ghcr.io/holhare/mogala/asterisk:latest
