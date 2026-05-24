@@ -54,6 +54,37 @@ func Migrate(db *sql.DB) {
 			started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (tenant_id) REFERENCES tenants(id)
 		)`,
+		`CREATE TABLE IF NOT EXISTS version (
+			table_name VARCHAR(32) NOT NULL,
+			table_version INT UNSIGNED NOT NULL DEFAULT 0,
+			CONSTRAINT ver_name_idx UNIQUE (table_name)
+		)`,
+		`CREATE TABLE IF NOT EXISTS location (
+			id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+			ruid VARCHAR(64) NOT NULL DEFAULT '',
+			username VARCHAR(64) NOT NULL DEFAULT '',
+			domain VARCHAR(64) DEFAULT NULL,
+			contact VARCHAR(512) NOT NULL DEFAULT '',
+			received VARCHAR(128) DEFAULT NULL,
+			path VARCHAR(512) DEFAULT NULL,
+			expires DATETIME NOT NULL DEFAULT '2030-05-28 21:32:15',
+			q FLOAT(10,2) NOT NULL DEFAULT 1.00,
+			callid VARCHAR(255) NOT NULL DEFAULT 'Default-Call-ID',
+			cseq INT NOT NULL DEFAULT 1,
+			last_modified DATETIME NOT NULL DEFAULT '2000-01-01 00:00:01',
+			flags INT NOT NULL DEFAULT 0,
+			cflags INT NOT NULL DEFAULT 0,
+			user_agent VARCHAR(255) NOT NULL DEFAULT '',
+			socket VARCHAR(64) DEFAULT NULL,
+			methods INT DEFAULT NULL,
+			instance VARCHAR(255) DEFAULT NULL,
+			reg_id INT NOT NULL DEFAULT 0,
+			server_id INT NOT NULL DEFAULT 0,
+			connection_id INT NOT NULL DEFAULT 0,
+			keepalive INT NOT NULL DEFAULT 0,
+			part INT NOT NULL DEFAULT 0
+		)`,
+		`INSERT IGNORE INTO version (table_name, table_version) VALUES ('location', 9)`,
 	}
 
 	for _, q := range queries {
