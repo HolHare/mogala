@@ -37,8 +37,12 @@ services:
       - "5060:5060/udp"
       - "5060:5060/tcp"
       - "5061:5061/tcp"
+      - "8080:8080/tcp"
+      - "8443:8443/tcp"
     environment:
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+    volumes:
+      - /home/lynden/mogala/certs:/certs:ro
     depends_on:
       - mysql
       - rtpproxy
