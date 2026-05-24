@@ -40,6 +40,9 @@ func main() {
 	protected := r.PathPrefix("/api").Subrouter()
 	protected.Use(middleware.JWTAuth)
 	protected.HandleFunc("/me", handlers.Me(database)).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/extensions", handlers.GetExtensions(database)).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/extensions", handlers.CreateExtension(database)).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/extensions", handlers.DeleteExtension(database)).Methods("DELETE", "OPTIONS")
 
 	port := os.Getenv("PORT")
 	if port == "" {
