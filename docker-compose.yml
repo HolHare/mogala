@@ -38,7 +38,7 @@ services:
       - "5060:5060/tcp"
       - "5061:5061/tcp"
     environment:
-      - DBURL=mysql://mogala_user:${MYSQL_PASSWORD}@mogala-mysql/mogala
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
     depends_on:
       - mysql
     networks:
