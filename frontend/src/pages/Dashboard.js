@@ -1,16 +1,21 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { request } from '../api';
+import Softphone from '../components/Softphone';
 
 export default function Dashboard() {
   const [user, setUser] = useState(null);
   const [page, setPage] = useState('dashboard');
+  const [myExtension, setMyExtension] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     request('/api/me').then(data => {
       if (data.error) { localStorage.removeItem('token'); navigate('/'); }
       else setUser(data);
+    });
+    request('/api/extensions').then(data => {
+      if (data && data.length > 0) setMyExtension(data[0]);
     });
   }, [navigate]);
 
@@ -31,12 +36,21 @@ export default function Dashboard() {
             { label: 'Users', icon: '👥', key: 'users' },
             { label: 'Settings', icon: '⚙️', key: 'settings' },
           ].map(item => (
-            <div key={item.key} style={{...s.navItem, ...(page === item.key ? s.navActive : {})}}
+            <div key={item.key}
+              style={{...s.navItem, ...(page === item.key ? s.navActive : {})}}
               onClick={() => setPage(item.key)}>
               {item.icon} {item.label}
             </div>
           ))}
         </nav>
+        {myExtension && (
+          <div style={{marginTop: 'auto', marginBottom: 16}}>
+            <Softphone
+              extension={myExtension.extension}
+              sipPassword={myExtension.sip_password}
+            />
+          </div>
+        )}
         <button style={s.logoutBtn} onClick={logout}>Logout</button>
       </div>
       <div style={s.main}>
@@ -87,7 +101,7 @@ function Extensions() {
   const create = async () => {
     const data = await request('/api/extensions', { method: 'POST', body: JSON.stringify(form) });
     if (data.id) { setMsg('Extension created!'); load(); setForm({ extension: '' }); }
-    else setMsg('Failed to create extension');
+    else setMsg(data.error || 'Failed');
   };
 
   const remove = async (id) => {
@@ -141,11 +155,11 @@ function Extensions() {
 
 const s = {
   page: { display: 'flex', minHeight: '100vh', background: '#f7f8fc' },
-  sidebar: { width: 240, background: '#1a1a2e', color: '#fff', padding: 24, display: 'flex', flexDirection: 'column' },
+  sidebar: { width: 280, background: '#1a1a2e', color: '#fff', padding: 24, display: 'flex', flexDirection: 'column' },
   logo: { fontSize: 20, fontWeight: 700, marginBottom: 40 },
   navItem: { padding: '12px 16px', borderRadius: 8, cursor: 'pointer', marginBottom: 4, color: '#a0aec0', fontSize: 14 },
   navActive: { background: '#4f46e5', color: '#fff' },
-  logoutBtn: { marginTop: 'auto', padding: '10px 16px', background: '#e53e3e', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer' },
+  logoutBtn: { padding: '10px 16px', background: '#e53e3e', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer' },
   main: { flex: 1, padding: 32 },
   topbar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 },
   userInfo: { display: 'flex', alignItems: 'center', gap: 12 },
