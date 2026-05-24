@@ -7,9 +7,9 @@ import (
 
 	"github.com/gorilla/mux"
 	_ "github.com/go-sql-driver/mysql"
-	"mogala/db"
-	"mogala/handlers"
-	"mogala/middleware"
+	"mogala-backend/db"
+	"mogala-backend/handlers"
+	"mogala-backend/middleware"
 )
 
 func main() {
