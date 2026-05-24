@@ -44,6 +44,20 @@ jobs:
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/${{ github.event.repository.name }}/frontend:latest
 
+      - name: Build and push Kamailio
+        uses: docker/build-push-action@v5
+        with:
+          context: ./kamailio
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/${{ github.event.repository.name }}/kamailio:latest
+
+      - name: Build and push Asterisk
+        uses: docker/build-push-action@v5
+        with:
+          context: ./asterisk
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/${{ github.event.repository.name }}/asterisk:latest
+
   deploy:
     needs: build
     runs-on: self-hosted
@@ -72,5 +86,7 @@ jobs:
             cd /home/${{ secrets.VPS_USER }}/mogala
             export MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
             export MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
+            export JWT_SECRET=${{ secrets.JWT_SECRET }}
+            export EXTERNAL_IP=${{ secrets.VPS_IP }}
             docker-compose pull
             docker-compose up -d --remove-orphans
