@@ -2,7 +2,6 @@ FROM debian:12-slim
 
 RUN apt-get update && apt-get install -y \
     asterisk \
-    asterisk-mysql \
     && rm -rf /var/lib/apt/lists/*
 
 COPY etc/asterisk/ /etc/asterisk/
