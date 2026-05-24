@@ -16,13 +16,13 @@ func main() {
 	database := db.Connect()
 	defer database.Close()
 
+	db.Migrate(database)
+
 	r := mux.NewRouter()
 
-	// Public routes
 	r.HandleFunc("/auth/register", handlers.Register(database)).Methods("POST")
 	r.HandleFunc("/auth/login", handlers.Login(database)).Methods("POST")
 
-	// Protected routes
 	protected := r.PathPrefix("/api").Subrouter()
 	protected.Use(middleware.JWTAuth)
 	protected.HandleFunc("/me", handlers.Me(database)).Methods("GET")
