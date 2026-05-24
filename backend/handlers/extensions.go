@@ -24,6 +24,12 @@ func generateSIPPassword() string {
 	return string(b)
 }
 
+func jsonError(w http.ResponseWriter, msg string, code int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
+
 func GetExtensions(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		claims := r.Context().Value("claims").(*middleware.Claims)
@@ -36,7 +42,7 @@ func GetExtensions(db *sql.DB) http.HandlerFunc {
 			LEFT JOIN users u ON u.id = e.user_id
 			WHERE e.tenant_id = ?`, claims.TenantID)
 		if err != nil {
-			http.Error(w, "Failed to fetch extensions", http.StatusInternalServerError)
+			jsonError(w, "Failed to fetch extensions", http.StatusInternalServerError)
 			return
 		}
 		defer rows.Close()
@@ -61,6 +67,7 @@ func GetExtensions(db *sql.DB) http.HandlerFunc {
 			extensions = []Extension{}
 		}
 
+		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(extensions)
 	}
 }
@@ -71,23 +78,34 @@ func CreateExtension(db *sql.DB) http.HandlerFunc {
 
 		var req CreateExtensionRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request", http.StatusBadRequest)
+			jsonError(w, "Invalid request", http.StatusBadRequest)
+			return
+		}
+
+		if req.Extension == "" {
+			jsonError(w, "Extension number is required", http.StatusBadRequest)
 			return
 		}
 
 		id := uuid.New().String()
 		sipPassword := generateSIPPassword()
 
+		var userID interface{}
+		if req.UserID != "" {
+			userID = req.UserID
+		}
+
 		_, err := db.Exec(`
 			INSERT INTO extensions (id, tenant_id, user_id, extension, sip_password)
 			VALUES (?, ?, ?, ?, ?)`,
-			id, claims.TenantID, req.UserID, req.Extension, sipPassword,
+			id, claims.TenantID, userID, req.Extension, sipPassword,
 		)
 		if err != nil {
-			http.Error(w, "Extension already exists", http.StatusConflict)
+			jsonError(w, "Extension already exists", http.StatusConflict)
 			return
 		}
 
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(map[string]string{
 			"id":           id,
@@ -103,7 +121,7 @@ func DeleteExtension(db *sql.DB) http.HandlerFunc {
 		id := r.URL.Query().Get("id")
 
 		db.Exec("DELETE FROM extensions WHERE id = ? AND tenant_id = ?", id, claims.TenantID)
-		w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"message": "Extension deleted"})
 	}
 }
