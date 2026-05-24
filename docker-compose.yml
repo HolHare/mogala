@@ -33,11 +33,15 @@ services:
     image: ghcr.io/holhare/mogala/kamailio:latest
     container_name: mogala-kamailio
     restart: unless-stopped
-    network_mode: host
+    ports:
+      - "5060:5060/udp"
+      - "5060:5060/tcp"
+      - "5061:5061/tcp"
     environment:
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
     depends_on:
       - mysql
+      - rtpproxy
     networks:
       - mogala-net
 
