@@ -82,7 +82,7 @@ func Migrate(db *sql.DB) {
 			server_id INT NOT NULL DEFAULT 0,
 			connection_id INT NOT NULL DEFAULT 0,
 			keepalive INT NOT NULL DEFAULT 0,
-			part INT NOT NULL DEFAULT 0
+			`partition` INT NOT NULL DEFAULT 0
 		)`,
 		`INSERT IGNORE INTO version (table_name, table_version) VALUES ('location', 9)`,
 	}
