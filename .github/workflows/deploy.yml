@@ -23,7 +23,7 @@ jobs:
         env:
           OWNER: ${{ github.repository_owner }}
 
-      - name: Log in to GHCR
+      - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -48,6 +48,19 @@ jobs:
     needs: build
     runs-on: self-hosted
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Copy docker-compose to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_IP }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          source: "docker-compose.yml"
+          target: "/home/${{ secrets.VPS_USER }}/mogala"
+
       - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -61,4 +74,3 @@ jobs:
             export MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
             docker-compose pull
             docker-compose up -d --remove-orphans
-            
