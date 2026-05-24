@@ -22,10 +22,25 @@ services:
     image: ghcr.io/holhare/mogala/frontend:latest
     container_name: mogala-frontend
     restart: unless-stopped
-    ports:
-      - "80:80"
+    expose:
+      - "80"
     depends_on:
       - backend
+    networks:
+      - mogala-net
+
+  nginx:
+    image: ghcr.io/holhare/mogala/nginx:latest
+    container_name: mogala-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /home/lynden/mogala/certs:/certs:ro
+    depends_on:
+      - frontend
+      - kamailio
     networks:
       - mogala-net
 
@@ -38,7 +53,6 @@ services:
       - "5060:5060/tcp"
       - "5061:5061/tcp"
       - "8880:8880/tcp"
-      - "8443:8443/tcp"
     environment:
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
     volumes:
