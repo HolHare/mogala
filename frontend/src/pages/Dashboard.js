@@ -18,8 +18,12 @@ export default function Dashboard() {
       if (data.error) { localStorage.removeItem('token'); navigate('/'); }
       else setUser(data);
     });
+    // Try user's assigned extension first, fall back to first available
     request('/api/users/my-extension').then(data => {
-      if (data && data.id) setMyExtension(data);
+      if (data && data.id) { setMyExtension(data); return; }
+      request('/api/extensions').then(list => {
+        if (Array.isArray(list) && list.length > 0) setMyExtension(list[0]);
+      });
     });
   }, [navigate]);
 
@@ -54,16 +58,10 @@ export default function Dashboard() {
             </div>
           ))}
         </nav>
-        {myExtension && (
-          <div style={{ marginTop: 'auto', marginBottom: 16 }}>
-            <Softphone
-              extension={myExtension.extension}
-              sipPassword={myExtension.sip_password}
-            />
-          </div>
-        )}
+        <div style={{ marginTop: 'auto' }} />
         <button style={s.logoutBtn} onClick={logout}>Logout</button>
       </div>
+      {myExtension && <FloatingSoftphone extension={myExtension.extension} sipPassword={myExtension.sip_password} />}
       <div style={s.main}>
         <div style={s.topbar}>
           <h2 style={{ margin: 0 }}>
@@ -82,6 +80,24 @@ export default function Dashboard() {
         {page === 'trunks' && <Trunks />}
         {page === 'settings' && <Settings />}
       </div>
+    </div>
+  );
+}
+
+function FloatingSoftphone({ extension, sipPassword }) {
+  const [open, setOpen] = useState(true);
+
+  return (
+    <div style={s.floatWrap}>
+      <div style={s.floatHeader} onClick={() => setOpen(o => !o)}>
+        <span>📞 Softphone — Ext {extension}</span>
+        <span style={{ fontSize: 12, marginLeft: 8, opacity: 0.7 }}>{open ? '▼' : '▲'}</span>
+      </div>
+      {open && (
+        <div style={s.floatBody}>
+          <Softphone extension={extension} sipPassword={sipPassword} />
+        </div>
+      )}
     </div>
   );
 }
@@ -210,4 +226,7 @@ const s = {
   th: { padding: '12px 16px', textAlign: 'left', fontSize: 13, color: '#666' },
   td: { padding: '12px 16px', fontSize: 14 },
   loading: { display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontSize: 18 },
+  floatWrap: { position: 'fixed', bottom: 24, right: 24, zIndex: 1000, boxShadow: '0 4px 24px rgba(0,0,0,0.25)', borderRadius: 12, overflow: 'hidden', minWidth: 300 },
+  floatHeader: { background: '#1a1a2e', color: '#fff', padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 14, fontWeight: 600 },
+  floatBody: { background: '#1a1a2e' },
 };
