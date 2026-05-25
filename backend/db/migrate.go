@@ -54,6 +54,16 @@ func Migrate(db *sql.DB) {
 			started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (tenant_id) REFERENCES tenants(id)
 		)`,
+		`CREATE TABLE IF NOT EXISTS cdr_logs (
+			id INT AUTO_INCREMENT PRIMARY KEY,
+			caller VARCHAR(64) NOT NULL DEFAULT '',
+			callee VARCHAR(64) NOT NULL DEFAULT '',
+			domain VARCHAR(255) NOT NULL DEFAULT '',
+			start_time DATETIME,
+			end_time DATETIME,
+			duration INT NOT NULL DEFAULT 0,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
 		`CREATE TABLE IF NOT EXISTS sip_trunks (
 			id CHAR(36) PRIMARY KEY,
 			tenant_id CHAR(36) NOT NULL,
