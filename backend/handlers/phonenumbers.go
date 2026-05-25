@@ -19,7 +19,7 @@ func GetPhoneNumbers(db *sql.DB) http.HandlerFunc {
 		claims := r.Context().Value("claims").(*middleware.Claims)
 
 		rows, err := db.Query(`
-			SELECT pn.id, pn.number, COALESCE(pn.assigned_to, ''), created_at,
+			SELECT pn.id, pn.number, COALESCE(pn.assigned_to, ''), pn.created_at,
 				COALESCE(u.first_name, '') as first_name,
 				COALESCE(u.last_name, '') as last_name
 			FROM phone_numbers pn

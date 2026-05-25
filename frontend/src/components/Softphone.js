@@ -21,10 +21,12 @@ export default function Softphone({ extension, sipPassword }) {
       uri,
       transportOptions: {
         server: WS_SERVER,
+        traceSip: true,
       },
       authorizationUsername: extension,
       authorizationPassword: sipPassword,
-      logBuiltinEnabled: false,
+      logBuiltinEnabled: true,
+      logLevel: 'warn',
     });
 
     ua.delegate = {
@@ -42,13 +44,14 @@ export default function Softphone({ extension, sipPassword }) {
       }
     };
 
+    setStatus(`Connecting to ${WS_SERVER}…`);
     ua.start().then(() => {
-      setStatus('Connecting...');
+      setStatus('WS connected, registering…');
       const registerer = new Registerer(ua);
       registerer.register().then(() => {
         setStatus('Registered ✓');
-      }).catch(() => setStatus('Registration failed'));
-    }).catch(() => setStatus('Connection failed'));
+      }).catch(err => setStatus(`Reg failed: ${err?.message || err}`));
+    }).catch(err => setStatus(`WS failed: ${err?.message || err}`));
 
     userAgentRef.current = ua;
 
