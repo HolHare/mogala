@@ -1,4 +1,4 @@
-const API = process.env.REACT_APP_API_URL || 'http://173.249.4.136:8080';
+const API = '';
 
 export const request = async (path, options = {}) => {
   const token = localStorage.getItem('token');
