@@ -3,6 +3,12 @@ import { UserAgent, Registerer, Inviter, SessionState } from 'sip.js';
 
 const WS_SERVER = `wss://${window.location.hostname}/ws`;
 const SIP_DOMAIN = window.location.hostname;
+const ICE_CONFIG = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+  ],
+};
 
 export default function Softphone({ extension, sipPassword }) {
   const [status, setStatus] = useState('Disconnected');
@@ -27,6 +33,9 @@ export default function Softphone({ extension, sipPassword }) {
       authorizationPassword: sipPassword,
       logBuiltinEnabled: true,
       logLevel: 'warn',
+      sessionDescriptionHandlerFactoryOptions: {
+        peerConnectionConfiguration: ICE_CONFIG,
+      },
     });
 
     ua.delegate = {
@@ -65,8 +74,9 @@ export default function Softphone({ extension, sipPassword }) {
     const target = UserAgent.makeURI(`sip:${dialNumber}@${SIP_DOMAIN}`);
     const inviter = new Inviter(userAgentRef.current, target, {
       sessionDescriptionHandlerOptions: {
-        constraints: { audio: true, video: false }
-      }
+        constraints: { audio: true, video: false },
+        peerConnectionConfiguration: ICE_CONFIG,
+      },
     });
 
     inviter.stateChange.addListener((state) => {
@@ -98,8 +108,9 @@ export default function Softphone({ extension, sipPassword }) {
     if (!sessionRef.current) return;
     sessionRef.current.accept({
       sessionDescriptionHandlerOptions: {
-        constraints: { audio: true, video: false }
-      }
+        constraints: { audio: true, video: false },
+        peerConnectionConfiguration: ICE_CONFIG,
+      },
     }).then(() => {
       setInCall(true);
       const remoteStream = new MediaStream();
