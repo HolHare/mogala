@@ -54,6 +54,19 @@ func Migrate(db *sql.DB) {
 			started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (tenant_id) REFERENCES tenants(id)
 		)`,
+		`CREATE TABLE IF NOT EXISTS sip_trunks (
+			id CHAR(36) PRIMARY KEY,
+			tenant_id CHAR(36) NOT NULL,
+			name VARCHAR(100) NOT NULL,
+			host VARCHAR(255) NOT NULL,
+			port INT NOT NULL DEFAULT 5060,
+			username VARCHAR(100),
+			password VARCHAR(255),
+			prefix VARCHAR(20),
+			active BOOLEAN NOT NULL DEFAULT TRUE,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (tenant_id) REFERENCES tenants(id)
+		)`,
 		`CREATE TABLE IF NOT EXISTS version (
 			table_name VARCHAR(32) NOT NULL,
 			table_version INT UNSIGNED NOT NULL DEFAULT 0,

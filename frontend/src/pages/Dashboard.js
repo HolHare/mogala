@@ -2,6 +2,10 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { request } from '../api';
 import Softphone from '../components/Softphone';
+import CallLogs from './CallLogs';
+import PhoneNumbers from './PhoneNumbers';
+import Users from './Users';
+import Trunks from './Trunks';
 
 export default function Dashboard() {
   const [user, setUser] = useState(null);
@@ -14,8 +18,8 @@ export default function Dashboard() {
       if (data.error) { localStorage.removeItem('token'); navigate('/'); }
       else setUser(data);
     });
-    request('/api/extensions').then(data => {
-      if (data && data.length > 0) setMyExtension(data[0]);
+    request('/api/users/my-extension').then(data => {
+      if (data && data.id) setMyExtension(data);
     });
   }, [navigate]);
 
@@ -23,28 +27,35 @@ export default function Dashboard() {
 
   if (!user) return <div style={s.loading}>Loading...</div>;
 
+  const isAdmin = user.role === 'admin' || user.role === 'superadmin';
+
+  const navItems = [
+    { label: 'Dashboard', icon: '🏠', key: 'dashboard' },
+    { label: 'Extensions', icon: '📱', key: 'extensions' },
+    { label: 'Phone Numbers', icon: '☎️', key: 'numbers' },
+    { label: 'Call Logs', icon: '📋', key: 'calllogs' },
+    ...(isAdmin ? [
+      { label: 'Users', icon: '👥', key: 'users' },
+      { label: 'SIP Trunks', icon: '🔗', key: 'trunks' },
+    ] : []),
+    { label: 'Settings', icon: '⚙️', key: 'settings' },
+  ];
+
   return (
     <div style={s.page}>
       <div style={s.sidebar}>
         <div style={s.logo}>📞 Mogala</div>
         <nav>
-          {[
-            { label: 'Dashboard', icon: '🏠', key: 'dashboard' },
-            { label: 'Extensions', icon: '📱', key: 'extensions' },
-            { label: 'Phone Numbers', icon: '☎️', key: 'numbers' },
-            { label: 'Call Logs', icon: '📋', key: 'calllogs' },
-            { label: 'Users', icon: '👥', key: 'users' },
-            { label: 'Settings', icon: '⚙️', key: 'settings' },
-          ].map(item => (
+          {navItems.map(item => (
             <div key={item.key}
-              style={{...s.navItem, ...(page === item.key ? s.navActive : {})}}
+              style={{ ...s.navItem, ...(page === item.key ? s.navActive : {}) }}
               onClick={() => setPage(item.key)}>
               {item.icon} {item.label}
             </div>
           ))}
         </nav>
         {myExtension && (
-          <div style={{marginTop: 'auto', marginBottom: 16}}>
+          <div style={{ marginTop: 'auto', marginBottom: 16 }}>
             <Softphone
               extension={myExtension.extension}
               sipPassword={myExtension.sip_password}
@@ -55,7 +66,9 @@ export default function Dashboard() {
       </div>
       <div style={s.main}>
         <div style={s.topbar}>
-          <h2 style={{margin:0}}>{page.charAt(0).toUpperCase() + page.slice(1)}</h2>
+          <h2 style={{ margin: 0 }}>
+            {navItems.find(n => n.key === page)?.label || page}
+          </h2>
           <div style={s.userInfo}>
             <span style={s.badge}>{user.role}</span>
             <span>{user.firstName} {user.lastName}</span>
@@ -63,22 +76,32 @@ export default function Dashboard() {
         </div>
         {page === 'dashboard' && <DashboardHome />}
         {page === 'extensions' && <Extensions />}
-        {!['dashboard','extensions'].includes(page) && (
-          <div style={s.comingSoon}>🚧 Coming Soon</div>
-        )}
+        {page === 'calllogs' && <CallLogs />}
+        {page === 'numbers' && <PhoneNumbers />}
+        {page === 'users' && <Users />}
+        {page === 'trunks' && <Trunks />}
+        {page === 'settings' && <Settings />}
       </div>
     </div>
   );
 }
 
 function DashboardHome() {
+  const [stats, setStats] = useState({ extensions: 0, numbers: 0, callLogs: 0 });
+
+  useEffect(() => {
+    request('/api/extensions').then(d => setStats(p => ({ ...p, extensions: Array.isArray(d) ? d.length : 0 })));
+    request('/api/phone-numbers').then(d => setStats(p => ({ ...p, numbers: Array.isArray(d) ? d.length : 0 })));
+    request('/api/call-logs').then(d => setStats(p => ({ ...p, callLogs: Array.isArray(d) ? d.length : 0 })));
+  }, []);
+
   return (
     <div style={s.grid}>
       {[
-        { label: 'Extensions', value: '0', icon: '📱' },
-        { label: 'Phone Numbers', value: '0', icon: '☎️' },
-        { label: 'Active Calls', value: '0', icon: '🔴' },
-        { label: 'Call Logs', value: '0', icon: '📋' },
+        { label: 'Extensions', value: stats.extensions, icon: '📱' },
+        { label: 'Phone Numbers', value: stats.numbers, icon: '☎️' },
+        { label: 'Active Calls', value: 0, icon: '🔴' },
+        { label: 'Call Logs', value: stats.callLogs, icon: '📋' },
       ].map(card => (
         <div key={card.label} style={s.statCard}>
           <div style={s.statIcon}>{card.icon}</div>
@@ -112,31 +135,31 @@ function Extensions() {
   return (
     <div>
       <div style={s.formCard}>
-        <h3 style={{marginTop:0}}>Create Extension</h3>
-        <div style={{display:'flex', gap:12}}>
+        <h3 style={{ marginTop: 0 }}>Create Extension</h3>
+        <div style={{ display: 'flex', gap: 12 }}>
           <input style={s.input} placeholder="Extension number (e.g. 1001)"
             value={form.extension}
-            onChange={e => setForm({extension: e.target.value})} />
+            onChange={e => setForm({ extension: e.target.value })} />
           <button style={s.btn} onClick={create}>Create</button>
         </div>
-        {msg && <p style={{color:'#38a169', marginTop:8}}>{msg}</p>}
+        {msg && <p style={{ color: '#38a169', marginTop: 8 }}>{msg}</p>}
       </div>
       <div style={s.tableCard}>
-        <h3 style={{marginTop:0}}>Extensions</h3>
+        <h3 style={{ marginTop: 0 }}>Extensions</h3>
         {extensions.length === 0 ? (
-          <p style={{color:'#888'}}>No extensions yet</p>
+          <p style={{ color: '#888' }}>No extensions yet</p>
         ) : (
-          <table style={{width:'100%', borderCollapse:'collapse'}}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{background:'#f7f8fc'}}>
-                {['Extension','SIP Password','Assigned To','Actions'].map(h => (
+              <tr style={{ background: '#f7f8fc' }}>
+                {['Extension', 'SIP Password', 'Assigned To', 'Actions'].map(h => (
                   <th key={h} style={s.th}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {extensions.map(e => (
-                <tr key={e.id} style={{borderBottom:'1px solid #e2e8f0'}}>
+                <tr key={e.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
                   <td style={s.td}><strong>{e.extension}</strong></td>
                   <td style={s.td}><code>{e.sip_password}</code></td>
                   <td style={s.td}>{e.first_name ? `${e.first_name} ${e.last_name}` : 'Unassigned'}</td>
@@ -149,6 +172,16 @@ function Extensions() {
           </table>
         )}
       </div>
+    </div>
+  );
+}
+
+function Settings() {
+  return (
+    <div style={{ ...s.tableCard, textAlign: 'center', padding: 60 }}>
+      <div style={{ fontSize: 48, marginBottom: 16 }}>⚙️</div>
+      <h3>Settings</h3>
+      <p style={{ color: '#888' }}>Tenant settings coming soon</p>
     </div>
   );
 }
@@ -176,6 +209,5 @@ const s = {
   deleteBtn: { padding: '6px 12px', background: '#e53e3e', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' },
   th: { padding: '12px 16px', textAlign: 'left', fontSize: 13, color: '#666' },
   td: { padding: '12px 16px', fontSize: 14 },
-  comingSoon: { textAlign: 'center', padding: 80, fontSize: 24, color: '#888' },
-  loading: { display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontSize: 18 }
+  loading: { display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontSize: 18 },
 };

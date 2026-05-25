@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { UserAgent, Registerer, Inviter, SessionState } from 'sip.js';
 
-const WS_SERVER = 'wss://173.249.4.136/ws';
-const SIP_DOMAIN = '173.249.4.136';
+const WS_SERVER = `wss://${window.location.hostname}/ws`;
+const SIP_DOMAIN = window.location.hostname;
 
 export default function Softphone({ extension, sipPassword }) {
   const [status, setStatus] = useState('Disconnected');

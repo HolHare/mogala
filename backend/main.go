@@ -39,10 +39,37 @@ func main() {
 
 	protected := r.PathPrefix("/api").Subrouter()
 	protected.Use(middleware.JWTAuth)
+
 	protected.HandleFunc("/me", handlers.Me(database)).Methods("GET", "OPTIONS")
+
+	// Extensions
 	protected.HandleFunc("/extensions", handlers.GetExtensions(database)).Methods("GET", "OPTIONS")
 	protected.HandleFunc("/extensions", handlers.CreateExtension(database)).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/extensions", handlers.DeleteExtension(database)).Methods("DELETE", "OPTIONS")
+
+	// Users
+	protected.HandleFunc("/users", handlers.GetUsers(database)).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/users", handlers.CreateUser(database)).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/users", handlers.DeleteUser(database)).Methods("DELETE", "OPTIONS")
+	protected.HandleFunc("/users", handlers.UpdateUser(database)).Methods("PUT", "OPTIONS")
+	protected.HandleFunc("/users/assign-extension", handlers.AssignExtension(database)).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/users/my-extension", handlers.GetUserExtension(database)).Methods("GET", "OPTIONS")
+
+	// Phone numbers
+	protected.HandleFunc("/phone-numbers", handlers.GetPhoneNumbers(database)).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/phone-numbers", handlers.CreatePhoneNumber(database)).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/phone-numbers", handlers.UpdatePhoneNumber(database)).Methods("PUT", "OPTIONS")
+	protected.HandleFunc("/phone-numbers", handlers.DeletePhoneNumber(database)).Methods("DELETE", "OPTIONS")
+	protected.HandleFunc("/phone-numbers/stats", handlers.GetPhoneNumberStats(database)).Methods("GET", "OPTIONS")
+
+	// Call logs
+	protected.HandleFunc("/call-logs", handlers.GetCallLogs(database)).Methods("GET", "OPTIONS")
+
+	// SIP trunks
+	protected.HandleFunc("/trunks", handlers.GetTrunks(database)).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/trunks", handlers.CreateTrunk(database)).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/trunks", handlers.UpdateTrunk(database)).Methods("PUT", "OPTIONS")
+	protected.HandleFunc("/trunks", handlers.DeleteTrunk(database)).Methods("DELETE", "OPTIONS")
 
 	port := os.Getenv("PORT")
 	if port == "" {
