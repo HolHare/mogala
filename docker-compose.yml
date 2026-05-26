@@ -38,6 +38,7 @@ services:
       - "443:443"
     volumes:
       - /home/lynden/mogala/certs:/certs:ro
+      - /var/log/nginx:/var/log/nginx
     depends_on:
       - frontend
       - kamailio
