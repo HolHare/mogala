@@ -1,122 +1,118 @@
 import { useState, useEffect } from 'react';
 import { request } from '../api';
+import { T } from '../theme';
+import { Icon } from '../components/Icons';
 
 const ROLES = ['admin', 'supervisor', 'agent', 'billing'];
-const ROLE_COLOR = { admin: '#4f46e5', supervisor: '#d97706', agent: '#38a169', billing: '#0891b2' };
 
 export default function Users() {
   const [users, setUsers] = useState([]);
   const [extensions, setExtensions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(false);
   const [form, setForm] = useState({ email: '', password: '', first_name: '', last_name: '', role: 'agent' });
-  const [msg, setMsg] = useState('');
-  const [msgColor, setMsgColor] = useState('#38a169');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState(null);
 
   const load = () => {
-    request('/api/users').then(data => setUsers(Array.isArray(data) ? data : []));
-    request('/api/extensions').then(data => setExtensions(Array.isArray(data) ? data : []));
+    Promise.all([
+      request('/api/users').then(d => setUsers(Array.isArray(d) ? d : [])),
+      request('/api/extensions').then(d => setExtensions(Array.isArray(d) ? d : [])),
+    ]).then(() => setLoading(false));
   };
 
   useEffect(() => { load(); }, []);
 
   const create = async () => {
-    if (!form.email || !form.password) { flash('Email and password required', '#e53e3e'); return; }
+    if (!form.email || !form.password) { flash('Email and password required', 'error'); return; }
+    setSaving(true);
     const data = await request('/api/users', { method: 'POST', body: JSON.stringify(form) });
+    setSaving(false);
     if (data.id) {
-      flash('User created!', '#38a169');
-      load();
+      flash('User created successfully', 'success');
+      setModal(false);
       setForm({ email: '', password: '', first_name: '', last_name: '', role: 'agent' });
-    } else flash(data.error || 'Failed', '#e53e3e');
+      load();
+    } else flash(data.error || 'Failed to create user', 'error');
   };
 
   const remove = async (id) => {
+    if (!window.confirm('Delete this user?')) return;
     await request(`/api/users?id=${id}`, { method: 'DELETE' });
     load();
   };
 
-  const changeRole = async (id, role, firstName, lastName) => {
-    await request(`/api/users?id=${id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ role, first_name: firstName, last_name: lastName }),
-    });
+  const changeRole = async (u, role) => {
+    await request(`/api/users?id=${u.id}`, { method: 'PUT', body: JSON.stringify({ role, first_name: u.first_name, last_name: u.last_name }) });
     load();
   };
 
-  const assignExtension = async (userId, extensionId) => {
-    await request('/api/users/assign-extension', {
-      method: 'POST',
-      body: JSON.stringify({ user_id: userId, extension_id: extensionId }),
-    });
+  const assignExt = async (userId, extensionId) => {
+    await request('/api/users/assign-extension', { method: 'POST', body: JSON.stringify({ user_id: userId, extension_id: extensionId }) });
     load();
   };
 
-  const flash = (text, color) => { setMsg(text); setMsgColor(color); };
+  const flash = (text, type) => { setMsg({ text, type }); setTimeout(() => setMsg(null), 3500); };
 
-  const userExtension = (userId) => extensions.find(e => e.assigned_to === userId || e.user_id === userId);
+  const userExt = (uid) => extensions.find(e => e.user_id === uid || e.assigned_to === uid);
 
   return (
-    <div>
-      <div style={s.card}>
-        <h3 style={s.title}>Add User</h3>
-        <div style={s.grid2}>
-          <input style={s.input} placeholder="Email *"
-            value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
-          <input style={s.input} placeholder="Password *" type="password"
-            value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
-          <input style={s.input} placeholder="First name"
-            value={form.first_name} onChange={e => setForm({ ...form, first_name: e.target.value })} />
-          <input style={s.input} placeholder="Last name"
-            value={form.last_name} onChange={e => setForm({ ...form, last_name: e.target.value })} />
+    <div className="fade-up">
+      {msg && <Toast msg={msg} />}
+      {modal && <Modal form={form} setForm={setForm} onSave={create} onClose={() => setModal(false)} saving={saving} />}
+
+      <div style={s.header}>
+        <div>
+          <h1 style={s.title}>Users</h1>
+          <p style={s.subtitle}>{users.length} team member{users.length !== 1 ? 's' : ''}</p>
         </div>
-        <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
-          <select style={s.select} value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
-            {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-          </select>
-          <button style={s.btn} onClick={create}>Add User</button>
-        </div>
-        {msg && <p style={{ color: msgColor, marginTop: 8 }}>{msg}</p>}
+        <button style={T.btn_s('primary')} onClick={() => setModal(true)}>
+          <Icon name="plus" size={16} /> Add User
+        </button>
       </div>
 
-      <div style={s.card}>
-        <h3 style={s.title}>Users ({users.length})</h3>
-        {users.length === 0 ? (
-          <p style={s.empty}>No users yet</p>
+      <div style={T.card_s()}>
+        {loading ? (
+          <div style={s.center}><span className="spin" style={spinnerLg} /></div>
+        ) : users.length === 0 ? (
+          <EmptyState />
         ) : (
           <table style={s.table}>
             <thead>
-              <tr style={s.thead}>
-                {['Name', 'Email', 'Role', 'Extension', 'Actions'].map(h => (
-                  <th key={h} style={s.th}>{h}</th>
-                ))}
-              </tr>
+              <tr>{['User', 'Email', 'Role', 'Extension', ''].map(h => <th key={h} style={s.th}>{h}</th>)}</tr>
             </thead>
             <tbody>
               {users.map(u => {
-                const ext = userExtension(u.id);
+                const ext = userExt(u.id);
+                const roleColor = T.roles[u.role] || T.textSub;
                 return (
                   <tr key={u.id} style={s.tr}>
-                    <td style={s.td}>{u.first_name || u.last_name ? `${u.first_name} ${u.last_name}` : '—'}</td>
-                    <td style={s.td}>{u.email}</td>
                     <td style={s.td}>
-                      <select style={s.inlineSelect}
-                        value={u.role}
-                        onChange={e => changeRole(u.id, e.target.value, u.first_name, u.last_name)}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ ...s.avatar, background: roleColor + '22', color: roleColor }}>
+                          {(u.first_name?.[0] || u.email[0]).toUpperCase()}
+                        </div>
+                        <span style={{ fontWeight: 500 }}>
+                          {u.first_name || u.last_name ? `${u.first_name} ${u.last_name}`.trim() : '—'}
+                        </span>
+                      </div>
+                    </td>
+                    <td style={{ ...s.td, color: T.textSub }}>{u.email}</td>
+                    <td style={s.td}>
+                      <select style={s.select} value={u.role} onChange={e => changeRole(u, e.target.value)}>
                         {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
                       </select>
                     </td>
                     <td style={s.td}>
-                      <select style={s.inlineSelect}
-                        value={ext?.id || ''}
-                        onChange={e => assignExtension(u.id, e.target.value)}>
-                        <option value="">None</option>
-                        {extensions.map(e => (
-                          <option key={e.id} value={e.id}>
-                            {e.extension} {e.first_name ? `(${e.first_name})` : ''}
-                          </option>
-                        ))}
+                      <select style={s.select} value={ext?.id || ''} onChange={e => assignExt(u.id, e.target.value)}>
+                        <option value="">No extension</option>
+                        {extensions.map(e => <option key={e.id} value={e.id}>{e.extension}</option>)}
                       </select>
                     </td>
                     <td style={s.td}>
-                      <button style={s.deleteBtn} onClick={() => remove(u.id)}>Delete</button>
+                      <button style={T.btn_s('danger')} onClick={() => remove(u.id)}>
+                        <Icon name="trash" size={14} /> Remove
+                      </button>
                     </td>
                   </tr>
                 );
@@ -129,19 +125,88 @@ export default function Users() {
   );
 }
 
+function Modal({ form, setForm, onSave, onClose, saving }) {
+  const f = (key) => ({ value: form[key], onChange: e => setForm({ ...form, [key]: e.target.value }) });
+  return (
+    <div style={overlay}>
+      <div style={s.modal} className="slide-in">
+        <div style={s.modalHeader}>
+          <h3 style={s.modalTitle}>Add User</h3>
+          <button style={s.closeBtn} onClick={onClose}><Icon name="xMark" size={18} /></button>
+        </div>
+        <div style={s.row2}>
+          <Field label="First name" placeholder="Alice" {...f('first_name')} />
+          <Field label="Last name" placeholder="Smith" {...f('last_name')} />
+        </div>
+        <Field label="Work email *" type="email" placeholder="alice@company.com" {...f('email')} />
+        <Field label="Password *" type="password" placeholder="Min 8 characters" {...f('password')} />
+        <div style={{ marginBottom: 20 }}>
+          <label style={s.label}>Role</label>
+          <select style={{ ...T.input_s() }} value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
+            {ROLES.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
+          </select>
+        </div>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button style={T.btn_s('ghost')} onClick={onClose}>Cancel</button>
+          <button style={T.btn_s('primary')} onClick={onSave} disabled={saving}>
+            {saving ? <span className="spin" style={spinner} /> : <Icon name="check" size={15} />}
+            {saving ? 'Creating…' : 'Create user'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, ...props }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <label style={s.label}>{label}</label>
+      <input style={T.input_s()} {...props} />
+    </div>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+      <div style={{ width: 56, height: 56, borderRadius: 16, background: T.primaryDim, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+        <Icon name="users" size={26} color={T.primary} />
+      </div>
+      <p style={{ margin: '0 0 6px', fontWeight: 600, color: T.text, fontSize: 15 }}>No users yet</p>
+      <p style={{ margin: 0, color: T.textSub, fontSize: 14 }}>Add your first team member to get started</p>
+    </div>
+  );
+}
+
+function Toast({ msg }) {
+  const c = msg.type === 'success' ? T.success : T.error;
+  return (
+    <div style={{ position: 'fixed', top: 24, right: 24, zIndex: 9999, background: c + '18', color: c, border: `1px solid ${c}44`, borderRadius: 10, padding: '12px 18px', fontSize: 14, fontWeight: 500, boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }} className="slide-in">
+      {msg.text}
+    </div>
+  );
+}
+
+const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' };
+const spinner = { width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block' };
+const spinnerLg = { width: 28, height: 28, border: '3px solid rgba(99,102,241,0.2)', borderTopColor: T.primary, borderRadius: '50%', display: 'inline-block' };
+
 const s = {
-  card: { background: '#fff', borderRadius: 12, padding: 24, marginBottom: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
-  title: { marginTop: 0, marginBottom: 16 },
-  empty: { color: '#888' },
-  grid2: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 },
-  input: { padding: '12px 16px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14 },
-  select: { flex: 1, padding: '12px 16px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14, background: '#fff' },
-  inlineSelect: { padding: '6px 10px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: 13, background: '#fff' },
-  btn: { padding: '12px 24px', background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 },
+  title: { margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: T.text },
+  subtitle: { margin: 0, fontSize: 14, color: T.textSub },
   table: { width: '100%', borderCollapse: 'collapse' },
-  thead: { background: '#f7f8fc' },
-  th: { padding: '12px 16px', textAlign: 'left', fontSize: 13, color: '#666', fontWeight: 600 },
-  tr: { borderBottom: '1px solid #e2e8f0' },
-  td: { padding: '12px 16px', fontSize: 14 },
-  deleteBtn: { padding: '6px 12px', background: '#e53e3e', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' },
+  th: { padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: T.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid ' + T.border },
+  tr: { borderBottom: '1px solid ' + T.border },
+  td: { padding: '13px 16px', fontSize: 14, color: T.text },
+  avatar: { width: 34, height: 34, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, flexShrink: 0 },
+  select: { padding: '7px 10px', borderRadius: 7, border: '1px solid ' + T.border, background: T.surface, color: T.text, fontSize: 13, cursor: 'pointer' },
+  modal: { background: T.card, border: '1px solid ' + T.border, borderRadius: 16, padding: 28, width: 480, maxWidth: '90vw', boxShadow: '0 24px 64px rgba(0,0,0,0.6)' },
+  modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  modalTitle: { margin: 0, fontSize: 18, fontWeight: 700, color: T.text },
+  closeBtn: { background: 'none', border: 'none', color: T.textSub, cursor: 'pointer', padding: 4 },
+  row2: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 },
+  label: { display: 'block', fontSize: 12, fontWeight: 500, color: T.textSub, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' },
+  center: { display: 'flex', justifyContent: 'center', padding: 60 },
 };

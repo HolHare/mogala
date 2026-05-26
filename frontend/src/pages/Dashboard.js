@@ -1,16 +1,48 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { request } from '../api';
+import { T } from '../theme';
+import { Icon } from '../components/Icons';
 import Softphone from '../components/Softphone';
+import Extensions from './Extensions';
 import CallLogs from './CallLogs';
 import PhoneNumbers from './PhoneNumbers';
 import Users from './Users';
 import Trunks from './Trunks';
+import Billing from './Billing';
+import IVR from './IVR';
+import CallFlows from './CallFlows';
+import RingGroups from './RingGroups';
+
+const NAV = [
+  { section: 'OVERVIEW', items: [
+    { key: 'dashboard', label: 'Dashboard',         icon: 'home' },
+  ]},
+  { section: 'COMMUNICATIONS', items: [
+    { key: 'extensions', label: 'Extensions',        icon: 'phone' },
+    { key: 'numbers',    label: 'Phone Numbers',     icon: 'hash' },
+    { key: 'calllogs',   label: 'Call Logs',         icon: 'list' },
+  ]},
+  { section: 'CALL MANAGEMENT', items: [
+    { key: 'ringgroups', label: 'Ring Groups',       icon: 'userGroup' },
+    { key: 'ivr',        label: 'IVR / Auto-Attendant', icon: 'menuAlt' },
+    { key: 'callflows',  label: 'Call Flows',        icon: 'share' },
+  ]},
+  { section: 'ADMIN', adminOnly: true, items: [
+    { key: 'users',      label: 'Users',             icon: 'users' },
+    { key: 'trunks',     label: 'SIP Trunks',        icon: 'server' },
+  ]},
+  { section: 'ACCOUNT', items: [
+    { key: 'billing',    label: 'Billing',           icon: 'creditCard' },
+    { key: 'settings',   label: 'Settings',          icon: 'cog' },
+  ]},
+];
 
 export default function Dashboard() {
   const [user, setUser] = useState(null);
   const [page, setPage] = useState('dashboard');
   const [myExtension, setMyExtension] = useState(null);
+  const [phoneOpen, setPhoneOpen] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -18,7 +50,6 @@ export default function Dashboard() {
       if (data.error) { localStorage.removeItem('token'); navigate('/'); }
       else setUser(data);
     });
-    // Try user's assigned extension first, fall back to first available
     request('/api/users/my-extension').then(data => {
       if (data && data.id) { setMyExtension(data); return; }
       request('/api/extensions').then(list => {
@@ -29,164 +60,215 @@ export default function Dashboard() {
 
   const logout = () => { localStorage.removeItem('token'); navigate('/'); };
 
-  if (!user) return <div style={s.loading}>Loading...</div>;
+  if (!user) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', flexDirection: 'column', gap: 16 }}>
+      <span className="spin" style={{ width: 36, height: 36, border: '3px solid rgba(99,102,241,0.2)', borderTopColor: T.primary, borderRadius: '50%', display: 'inline-block' }} />
+      <span style={{ color: T.textSub, fontSize: 14 }}>Loading your workspace…</span>
+    </div>
+  );
 
   const isAdmin = user.role === 'admin' || user.role === 'superadmin';
-
-  const navItems = [
-    { label: 'Dashboard', icon: '🏠', key: 'dashboard' },
-    { label: 'Extensions', icon: '📱', key: 'extensions' },
-    { label: 'Phone Numbers', icon: '☎️', key: 'numbers' },
-    { label: 'Call Logs', icon: '📋', key: 'calllogs' },
-    ...(isAdmin ? [
-      { label: 'Users', icon: '👥', key: 'users' },
-      { label: 'SIP Trunks', icon: '🔗', key: 'trunks' },
-    ] : []),
-    { label: 'Settings', icon: '⚙️', key: 'settings' },
-  ];
+  const roleColor = T.roles[user.role] || T.textSub;
+  const initials = ((user.firstName?.[0] || '') + (user.lastName?.[0] || '') || user.email[0]).toUpperCase();
+  const pageTitle = NAV.flatMap(g => g.items).find(i => i.key === page)?.label || 'Dashboard';
 
   return (
-    <div style={s.page}>
+    <div style={s.root}>
+      {/* Sidebar */}
       <div style={s.sidebar}>
-        <div style={s.logo}>📞 Mogala</div>
-        <nav>
-          {navItems.map(item => (
-            <div key={item.key}
-              style={{ ...s.navItem, ...(page === item.key ? s.navActive : {}) }}
-              onClick={() => setPage(item.key)}>
-              {item.icon} {item.label}
-            </div>
-          ))}
+        {/* Logo */}
+        <div style={s.logoWrap}>
+          <div style={s.logoMark}>M</div>
+          <span style={s.logoText}>Mogala</span>
+        </div>
+
+        {/* Nav */}
+        <nav style={s.nav}>
+          {NAV.map(group => {
+            if (group.adminOnly && !isAdmin) return null;
+            return (
+              <div key={group.section} style={s.navGroup}>
+                <div style={s.navSection}>{group.section}</div>
+                {group.items.map(item => (
+                  <button key={item.key} style={{ ...s.navItem, ...(page === item.key ? s.navActive : {}) }}
+                    onClick={() => setPage(item.key)}>
+                    <Icon name={item.icon} size={16} color={page === item.key ? T.primaryHov : T.textSub} />
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            );
+          })}
         </nav>
-        <div style={{ marginTop: 'auto' }} />
-        <button style={s.logoutBtn} onClick={logout}>Logout</button>
+
+        {/* Softphone toggle */}
+        {myExtension && (
+          <div style={s.phoneWrap}>
+            <button style={s.phoneToggle} onClick={() => setPhoneOpen(o => !o)}>
+              <div style={{ ...s.regDot, background: phoneOpen ? T.success : T.textMuted }} />
+              <span>Ext {myExtension.extension}</span>
+              <Icon name="chevronDown" size={14} color={T.textSub} style={{ marginLeft: 'auto', transform: phoneOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+            </button>
+            {phoneOpen && (
+              <div style={s.phoneBody} className="slide-in">
+                <Softphone extension={myExtension.extension} sipPassword={myExtension.sip_password} />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* User footer */}
+        <div style={s.userFooter}>
+          <div style={{ ...s.avatar, background: roleColor + '22', color: roleColor }}>{initials}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={s.userName}>{user.firstName} {user.lastName}</div>
+            <div style={{ ...T.badge_s(roleColor), display: 'inline-flex' }}>{user.role}</div>
+          </div>
+          <button style={s.logoutBtn} onClick={logout} title="Logout">
+            <Icon name="logout" size={16} color={T.textSub} />
+          </button>
+        </div>
       </div>
-      {myExtension && <FloatingSoftphone extension={myExtension.extension} sipPassword={myExtension.sip_password} />}
+
+      {/* Main */}
       <div style={s.main}>
+        {/* Topbar */}
         <div style={s.topbar}>
-          <h2 style={{ margin: 0 }}>
-            {navItems.find(n => n.key === page)?.label || page}
-          </h2>
-          <div style={s.userInfo}>
-            <span style={s.badge}>{user.role}</span>
-            <span>{user.firstName} {user.lastName}</span>
+          <h2 style={s.pageTitle}>{pageTitle}</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button style={s.iconBtn} title="Notifications">
+              <Icon name="bell" size={18} color={T.textSub} />
+            </button>
           </div>
         </div>
-        {page === 'dashboard' && <DashboardHome />}
-        {page === 'extensions' && <Extensions />}
-        {page === 'calllogs' && <CallLogs />}
-        {page === 'numbers' && <PhoneNumbers />}
-        {page === 'users' && <Users />}
-        {page === 'trunks' && <Trunks />}
-        {page === 'settings' && <Settings />}
-      </div>
-    </div>
-  );
-}
 
-function FloatingSoftphone({ extension, sipPassword }) {
-  const [open, setOpen] = useState(true);
-
-  return (
-    <div style={s.floatWrap}>
-      <div style={s.floatHeader} onClick={() => setOpen(o => !o)}>
-        <span>📞 Softphone — Ext {extension}</span>
-        <span style={{ fontSize: 12, marginLeft: 8, opacity: 0.7 }}>{open ? '▼' : '▲'}</span>
-      </div>
-      {open && (
-        <div style={s.floatBody}>
-          <Softphone extension={extension} sipPassword={sipPassword} />
+        {/* Content */}
+        <div style={s.content}>
+          {page === 'dashboard'  && <DashboardHome setPage={setPage} />}
+          {page === 'extensions' && <Extensions />}
+          {page === 'calllogs'   && <CallLogs />}
+          {page === 'numbers'    && <PhoneNumbers />}
+          {page === 'users'      && <Users />}
+          {page === 'trunks'     && <Trunks />}
+          {page === 'billing'    && <Billing />}
+          {page === 'ivr'        && <IVR />}
+          {page === 'callflows'  && <CallFlows />}
+          {page === 'ringgroups' && <RingGroups />}
+          {page === 'settings'   && <Settings />}
         </div>
-      )}
+      </div>
     </div>
   );
 }
 
-function DashboardHome() {
+function DashboardHome({ setPage }) {
   const [stats, setStats] = useState({ extensions: 0, numbers: 0, callLogs: 0 });
+  const [recentCalls, setRecentCalls] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    request('/api/extensions').then(d => setStats(p => ({ ...p, extensions: Array.isArray(d) ? d.length : 0 })));
-    request('/api/phone-numbers').then(d => setStats(p => ({ ...p, numbers: Array.isArray(d) ? d.length : 0 })));
-    request('/api/call-logs').then(d => setStats(p => ({ ...p, callLogs: Array.isArray(d) ? d.length : 0 })));
+    Promise.all([
+      request('/api/extensions').then(d => ({ extensions: Array.isArray(d) ? d.length : 0 })),
+      request('/api/phone-numbers').then(d => ({ numbers: Array.isArray(d) ? d.length : 0 })),
+      request('/api/call-logs').then(d => {
+        const arr = Array.isArray(d) ? d : [];
+        return { callLogs: arr.length, recent: arr.slice(0, 5) };
+      }),
+    ]).then(([e, n, c]) => {
+      setStats({ ...e, ...n, callLogs: c.callLogs });
+      setRecentCalls(c.recent);
+      setLoading(false);
+    });
   }, []);
 
-  return (
-    <div style={s.grid}>
-      {[
-        { label: 'Extensions', value: stats.extensions, icon: '📱' },
-        { label: 'Phone Numbers', value: stats.numbers, icon: '☎️' },
-        { label: 'Active Calls', value: 0, icon: '🔴' },
-        { label: 'Call Logs', value: stats.callLogs, icon: '📋' },
-      ].map(card => (
-        <div key={card.label} style={s.statCard}>
-          <div style={s.statIcon}>{card.icon}</div>
-          <div style={s.statValue}>{card.value}</div>
-          <div style={s.statLabel}>{card.label}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
+  const statCards = [
+    { label: 'Extensions',    value: stats.extensions, icon: 'phone',     color: T.primary,  key: 'extensions' },
+    { label: 'Phone Numbers', value: stats.numbers,    icon: 'hash',      color: T.info,     key: 'numbers' },
+    { label: 'Active Calls',  value: 0,                icon: 'arrowPath', color: T.success,  key: null },
+    { label: 'Call Logs',     value: stats.callLogs,   icon: 'chartBar',  color: T.warning,  key: 'calllogs' },
+  ];
 
-function Extensions() {
-  const [extensions, setExtensions] = useState([]);
-  const [form, setForm] = useState({ extension: '' });
-  const [msg, setMsg] = useState('');
-
-  const load = () => request('/api/extensions').then(setExtensions);
-  useEffect(() => { load(); }, []);
-
-  const create = async () => {
-    const data = await request('/api/extensions', { method: 'POST', body: JSON.stringify(form) });
-    if (data.id) { setMsg('Extension created!'); load(); setForm({ extension: '' }); }
-    else setMsg(data.error || 'Failed');
-  };
-
-  const remove = async (id) => {
-    await request(`/api/extensions?id=${id}`, { method: 'DELETE' });
-    load();
-  };
+  const STATUS_COLOR = { answered: T.success, missed: T.error, failed: T.warning };
 
   return (
-    <div>
-      <div style={s.formCard}>
-        <h3 style={{ marginTop: 0 }}>Create Extension</h3>
-        <div style={{ display: 'flex', gap: 12 }}>
-          <input style={s.input} placeholder="Extension number (e.g. 1001)"
-            value={form.extension}
-            onChange={e => setForm({ extension: e.target.value })} />
-          <button style={s.btn} onClick={create}>Create</button>
-        </div>
-        {msg && <p style={{ color: '#38a169', marginTop: 8 }}>{msg}</p>}
+    <div className="fade-up">
+      <div style={s2.statGrid}>
+        {statCards.map(c => (
+          <div key={c.label} style={s2.statCard} onClick={() => c.key && setPage(c.key)}>
+            <div style={{ ...s2.statIcon, background: c.color + '18', border: '1px solid ' + c.color + '33' }}>
+              <Icon name={c.icon} size={22} color={c.color} />
+            </div>
+            <div style={s2.statValue}>{loading ? '—' : c.value}</div>
+            <div style={s2.statLabel}>{c.label}</div>
+            {c.key && <div style={s2.statArrow}><Icon name="chevronRight" size={14} color={T.textMuted} /></div>}
+          </div>
+        ))}
       </div>
-      <div style={s.tableCard}>
-        <h3 style={{ marginTop: 0 }}>Extensions</h3>
-        {extensions.length === 0 ? (
-          <p style={{ color: '#888' }}>No extensions yet</p>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: '#f7f8fc' }}>
-                {['Extension', 'SIP Password', 'Assigned To', 'Actions'].map(h => (
-                  <th key={h} style={s.th}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {extensions.map(e => (
-                <tr key={e.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                  <td style={s.td}><strong>{e.extension}</strong></td>
-                  <td style={s.td}><code>{e.sip_password}</code></td>
-                  <td style={s.td}>{e.first_name ? `${e.first_name} ${e.last_name}` : 'Unassigned'}</td>
-                  <td style={s.td}>
-                    <button style={s.deleteBtn} onClick={() => remove(e.id)}>Delete</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+
+      <div style={s2.grid2}>
+        {/* Recent calls */}
+        <div style={T.card_s()}>
+          <div style={s2.sectionHead}>
+            <span style={s2.sectionTitle}>Recent Calls</span>
+            <button style={T.btn_s('ghost')} onClick={() => setPage('calllogs')}>View all</button>
+          </div>
+          {loading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+              <span className="spin" style={{ width: 24, height: 24, border: '2px solid rgba(99,102,241,0.2)', borderTopColor: T.primary, borderRadius: '50%', display: 'inline-block' }} />
+            </div>
+          ) : recentCalls.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: T.textSub, fontSize: 14 }}>
+              No calls recorded yet
+            </div>
+          ) : (
+            <div style={s2.callList}>
+              {recentCalls.map(l => {
+                const sc = STATUS_COLOR[l.status] || T.textSub;
+                return (
+                  <div key={l.id} style={s2.callRow}>
+                    <div style={{ ...s2.callIcon, background: sc + '18' }}>
+                      <Icon name={l.status === 'missed' ? 'phoneDown' : 'phoneUp'} size={14} color={sc} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 500, color: T.text }}>
+                        {l.caller} → {l.callee}
+                      </div>
+                      <div style={{ fontSize: 12, color: T.textSub, marginTop: 2 }}>
+                        {new Date(l.started_at).toLocaleString()}
+                      </div>
+                    </div>
+                    <span style={T.badge_s(sc)}>{l.status}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Quick actions */}
+        <div style={T.card_s()}>
+          <div style={s2.sectionHead}>
+            <span style={s2.sectionTitle}>Quick Actions</span>
+          </div>
+          <div style={s2.quickList}>
+            {[
+              { label: 'Add extension',     icon: 'phone',     page: 'extensions', color: T.primary },
+              { label: 'Add phone number',  icon: 'hash',      page: 'numbers',    color: T.info },
+              { label: 'Configure IVR',     icon: 'menuAlt',   page: 'ivr',        color: T.warning },
+              { label: 'Set up call flow',  icon: 'share',     page: 'callflows',  color: T.success },
+              { label: 'Manage ring groups',icon: 'userGroup', page: 'ringgroups', color: T.error },
+              { label: 'View billing',      icon: 'creditCard',page: 'billing',    color: T.textSub },
+            ].map(a => (
+              <button key={a.label} style={s2.quickItem} onClick={() => setPage(a.page)}>
+                <div style={{ ...s2.quickIcon, background: a.color + '18' }}>
+                  <Icon name={a.icon} size={16} color={a.color} />
+                </div>
+                <span style={{ fontSize: 14, color: T.text }}>{a.label}</span>
+                <Icon name="chevronRight" size={14} color={T.textMuted} style={{ marginLeft: 'auto' }} />
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -194,39 +276,56 @@ function Extensions() {
 
 function Settings() {
   return (
-    <div style={{ ...s.tableCard, textAlign: 'center', padding: 60 }}>
-      <div style={{ fontSize: 48, marginBottom: 16 }}>⚙️</div>
-      <h3>Settings</h3>
-      <p style={{ color: '#888' }}>Tenant settings coming soon</p>
+    <div style={{ ...T.card_s(), textAlign: 'center', padding: '80px 40px' }}>
+      <div style={{ width: 64, height: 64, borderRadius: 18, background: T.primaryDim, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+        <Icon name="cog" size={30} color={T.primary} />
+      </div>
+      <h3 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 700, color: T.text }}>Settings</h3>
+      <p style={{ margin: 0, color: T.textSub, fontSize: 14 }}>Tenant and account settings coming soon</p>
     </div>
   );
 }
 
 const s = {
-  page: { display: 'flex', minHeight: '100vh', background: '#f7f8fc' },
-  sidebar: { width: 280, background: '#1a1a2e', color: '#fff', padding: 24, display: 'flex', flexDirection: 'column' },
-  logo: { fontSize: 20, fontWeight: 700, marginBottom: 40 },
-  navItem: { padding: '12px 16px', borderRadius: 8, cursor: 'pointer', marginBottom: 4, color: '#a0aec0', fontSize: 14 },
-  navActive: { background: '#4f46e5', color: '#fff' },
-  logoutBtn: { padding: '10px 16px', background: '#e53e3e', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer' },
-  main: { flex: 1, padding: 32 },
-  topbar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 },
-  userInfo: { display: 'flex', alignItems: 'center', gap: 12 },
-  badge: { background: '#4f46e5', color: '#fff', padding: '4px 12px', borderRadius: 20, fontSize: 12 },
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 },
-  statCard: { background: '#fff', borderRadius: 12, padding: 24, textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
-  statIcon: { fontSize: 32, marginBottom: 8 },
-  statValue: { fontSize: 32, fontWeight: 700, color: '#1a1a2e' },
-  statLabel: { color: '#888', fontSize: 14, marginTop: 4 },
-  formCard: { background: '#fff', borderRadius: 12, padding: 24, marginBottom: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
-  tableCard: { background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
-  input: { flex: 1, padding: '12px 16px', borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 14 },
-  btn: { padding: '12px 24px', background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600 },
-  deleteBtn: { padding: '6px 12px', background: '#e53e3e', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' },
-  th: { padding: '12px 16px', textAlign: 'left', fontSize: 13, color: '#666' },
-  td: { padding: '12px 16px', fontSize: 14 },
-  loading: { display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontSize: 18 },
-  floatWrap: { position: 'fixed', bottom: 24, right: 24, zIndex: 1000, boxShadow: '0 4px 24px rgba(0,0,0,0.25)', borderRadius: 12, overflow: 'hidden', minWidth: 300 },
-  floatHeader: { background: '#1a1a2e', color: '#fff', padding: '10px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 14, fontWeight: 600 },
-  floatBody: { background: '#1a1a2e' },
+  root: { display: 'flex', minHeight: '100vh', background: T.bg },
+  sidebar: { width: 248, background: T.sidebar, borderRight: '1px solid ' + T.border, display: 'flex', flexDirection: 'column', flexShrink: 0, position: 'sticky', top: 0, height: '100vh', overflowY: 'auto' },
+  logoWrap: { display: 'flex', alignItems: 'center', gap: 10, padding: '20px 20px 16px' },
+  logoMark: { width: 32, height: 32, borderRadius: 9, background: 'linear-gradient(135deg, #6366f1, #818cf8)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 16, flexShrink: 0 },
+  logoText: { fontSize: 17, fontWeight: 700, color: T.text },
+  nav: { flex: 1, padding: '0 12px', overflowY: 'auto' },
+  navGroup: { marginBottom: 8 },
+  navSection: { fontSize: 10, fontWeight: 700, color: T.textMuted, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '12px 8px 4px' },
+  navItem: { display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '9px 10px', borderRadius: 8, border: 'none', background: 'transparent', color: T.textSub, fontSize: 14, fontWeight: 500, cursor: 'pointer', textAlign: 'left', marginBottom: 1, transition: 'background 0.12s, color 0.12s' },
+  navActive: { background: T.primaryDim, color: T.text },
+  phoneWrap: { margin: '8px 12px', borderTop: '1px solid ' + T.border, paddingTop: 12 },
+  phoneToggle: { display: 'flex', alignItems: 'center', gap: 8, width: '100%', background: T.surface, border: '1px solid ' + T.border, borderRadius: 8, padding: '8px 12px', color: T.text, fontSize: 13, fontWeight: 500, cursor: 'pointer' },
+  regDot: { width: 8, height: 8, borderRadius: '50%', flexShrink: 0 },
+  phoneBody: { marginTop: 8 },
+  userFooter: { display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderTop: '1px solid ' + T.border, marginTop: 'auto' },
+  avatar: { width: 32, height: 32, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, flexShrink: 0 },
+  userName: { fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  logoutBtn: { background: 'none', border: 'none', cursor: 'pointer', padding: 6, borderRadius: 6, flexShrink: 0, display: 'flex', alignItems: 'center' },
+  main: { flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 },
+  topbar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 32px 0', borderBottom: '1px solid ' + T.border, paddingBottom: 20, position: 'sticky', top: 0, background: T.bg, zIndex: 10 },
+  pageTitle: { margin: 0, fontSize: 20, fontWeight: 700, color: T.text },
+  iconBtn: { background: 'none', border: 'none', cursor: 'pointer', padding: 8, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  content: { flex: 1, padding: 32, overflowY: 'auto' },
+};
+
+const s2 = {
+  statGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 },
+  statCard: { ...T.card_s(), display: 'flex', flexDirection: 'column', gap: 4, position: 'relative', cursor: 'pointer', transition: 'border-color 0.15s' },
+  statIcon: { width: 48, height: 48, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  statValue: { fontSize: 32, fontWeight: 800, color: T.text, letterSpacing: '-0.02em' },
+  statLabel: { fontSize: 13, color: T.textSub, fontWeight: 500 },
+  statArrow: { position: 'absolute', top: 16, right: 16 },
+  grid2: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 },
+  sectionHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  sectionTitle: { fontSize: 15, fontWeight: 700, color: T.text },
+  callList: { display: 'flex', flexDirection: 'column', gap: 2 },
+  callRow: { display: 'flex', alignItems: 'center', gap: 12, padding: '10px 4px', borderBottom: '1px solid ' + T.border },
+  callIcon: { width: 32, height: 32, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  quickList: { display: 'flex', flexDirection: 'column', gap: 4 },
+  quickItem: { display: 'flex', alignItems: 'center', gap: 12, padding: '10px 4px', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 8, width: '100%', transition: 'background 0.1s' },
+  quickIcon: { width: 32, height: 32, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
 };

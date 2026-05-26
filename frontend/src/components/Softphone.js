@@ -1,184 +1,136 @@
 import { useState, useEffect, useRef } from 'react';
 import { UserAgent, Registerer, Inviter, SessionState } from 'sip.js';
+import { T } from '../theme';
+import { Icon } from './Icons';
 
 const WS_SERVER = `wss://${window.location.hostname}/ws`;
 const SIP_DOMAIN = window.location.hostname;
-const ICE_CONFIG = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-  ],
-};
+const ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
 
 export default function Softphone({ extension, sipPassword }) {
-  const [status, setStatus] = useState('Disconnected');
-  const [callStatus, setCallStatus] = useState('');
-  const [dialNumber, setDialNumber] = useState('');
-  const [inCall, setInCall] = useState(false);
-  const userAgentRef = useRef(null);
-  const sessionRef = useRef(null);
-  const remoteAudioRef = useRef(null);
+  const [status, setStatus]       = useState('Connecting…');
+  const [registered, setReg]      = useState(false);
+  const [callStatus, setCallSt]   = useState('');
+  const [inCall, setInCall]        = useState(false);
+  const [dial, setDial]           = useState('');
+  const uaRef = useRef(null);
+  const sessRef = useRef(null);
+  const audioRef = useRef(null);
 
   useEffect(() => {
     if (!extension || !sipPassword) return;
-
     const uri = UserAgent.makeURI(`sip:${extension}@${SIP_DOMAIN}`);
     const ua = new UserAgent({
       uri,
-      transportOptions: {
-        server: WS_SERVER,
-        traceSip: true,
-      },
+      transportOptions: { server: WS_SERVER, traceSip: false },
       authorizationUsername: extension,
       authorizationPassword: sipPassword,
-      logBuiltinEnabled: true,
-      logLevel: 'warn',
-      sessionDescriptionHandlerFactoryOptions: {
-        peerConnectionConfiguration: ICE_CONFIG,
-      },
+      logBuiltinEnabled: false,
+      sessionDescriptionHandlerFactoryOptions: { peerConnectionConfiguration: ICE },
     });
 
     ua.delegate = {
-      onInvite: (invitation) => {
-        setCallStatus(`Incoming call from ${invitation.remoteIdentity.uri.user}`);
-        sessionRef.current = invitation;
-
-        invitation.stateChange.addListener((state) => {
-          if (state === SessionState.Terminated) {
-            setInCall(false);
-            setCallStatus('');
-            sessionRef.current = null;
-          }
+      onInvite: (inv) => {
+        setCallSt(`Incoming: ${inv.remoteIdentity.uri.user}`);
+        sessRef.current = inv;
+        inv.stateChange.addListener(st => {
+          if (st === SessionState.Terminated) { setInCall(false); setCallSt(''); sessRef.current = null; }
         });
-      }
+      },
     };
 
-    setStatus(`Connecting to ${WS_SERVER}…`);
-    ua.start().then(() => {
-      setStatus('WS connected, registering…');
-      const registerer = new Registerer(ua);
-      registerer.register().then(() => {
-        setStatus('Registered ✓');
-      }).catch(err => setStatus(`Reg failed: ${err?.message || err}`));
-    }).catch(err => setStatus(`WS failed: ${err?.message || err}`));
+    ua.start()
+      .then(() => { const r = new Registerer(ua); r.register().then(() => { setReg(true); setStatus('Registered'); }).catch(e => setStatus(`Reg failed`)); })
+      .catch(() => setStatus('Connection failed'));
 
-    userAgentRef.current = ua;
-
-    return () => {
-      ua.stop();
-    };
+    uaRef.current = ua;
+    return () => { ua.stop(); };
   }, [extension, sipPassword]);
 
-  const makeCall = () => {
-    if (!dialNumber || !userAgentRef.current) return;
-    const target = UserAgent.makeURI(`sip:${dialNumber}@${SIP_DOMAIN}`);
-    const inviter = new Inviter(userAgentRef.current, target, {
-      sessionDescriptionHandlerOptions: {
-        constraints: { audio: true, video: false },
-        peerConnectionConfiguration: ICE_CONFIG,
-      },
+  const call = () => {
+    if (!dial || !uaRef.current) return;
+    const inv = new Inviter(uaRef.current, UserAgent.makeURI(`sip:${dial}@${SIP_DOMAIN}`), {
+      sessionDescriptionHandlerOptions: { constraints: { audio: true, video: false }, peerConnectionConfiguration: ICE },
     });
-
-    inviter.stateChange.addListener((state) => {
-      if (state === SessionState.Established) {
-        setInCall(true);
-        setCallStatus(`In call with ${dialNumber}`);
-        const remoteStream = new MediaStream();
-        inviter.sessionDescriptionHandler.peerConnection.getReceivers().forEach(r => {
-          if (r.track) remoteStream.addTrack(r.track);
-        });
-        if (remoteAudioRef.current) {
-          remoteAudioRef.current.srcObject = remoteStream;
-          remoteAudioRef.current.play();
-        }
+    inv.stateChange.addListener(st => {
+      if (st === SessionState.Established) {
+        setInCall(true); setCallSt(`In call: ${dial}`);
+        const stream = new MediaStream();
+        inv.sessionDescriptionHandler.peerConnection.getReceivers().forEach(r => r.track && stream.addTrack(r.track));
+        if (audioRef.current) { audioRef.current.srcObject = stream; audioRef.current.play(); }
       }
-      if (state === SessionState.Terminated) {
-        setInCall(false);
-        setCallStatus('');
-        sessionRef.current = null;
-      }
+      if (st === SessionState.Terminated) { setInCall(false); setCallSt(''); sessRef.current = null; }
     });
-
-    inviter.invite();
-    sessionRef.current = inviter;
-    setCallStatus(`Calling ${dialNumber}...`);
+    inv.invite();
+    sessRef.current = inv;
+    setCallSt(`Calling ${dial}…`);
   };
 
-  const answerCall = () => {
-    if (!sessionRef.current) return;
-    sessionRef.current.accept({
-      sessionDescriptionHandlerOptions: {
-        constraints: { audio: true, video: false },
-        peerConnectionConfiguration: ICE_CONFIG,
-      },
+  const answer = () => {
+    if (!sessRef.current) return;
+    sessRef.current.accept({
+      sessionDescriptionHandlerOptions: { constraints: { audio: true, video: false }, peerConnectionConfiguration: ICE },
     }).then(() => {
       setInCall(true);
-      const remoteStream = new MediaStream();
-      sessionRef.current.sessionDescriptionHandler.peerConnection.getReceivers().forEach(r => {
-        if (r.track) remoteStream.addTrack(r.track);
-      });
-      if (remoteAudioRef.current) {
-        remoteAudioRef.current.srcObject = remoteStream;
-        remoteAudioRef.current.play();
-      }
+      const stream = new MediaStream();
+      sessRef.current.sessionDescriptionHandler.peerConnection.getReceivers().forEach(r => r.track && stream.addTrack(r.track));
+      if (audioRef.current) { audioRef.current.srcObject = stream; audioRef.current.play(); }
     });
   };
 
   const hangup = () => {
-    if (sessionRef.current) {
-      sessionRef.current.bye?.() || sessionRef.current.reject?.();
-    }
-    setInCall(false);
-    setCallStatus('');
+    sessRef.current?.bye?.() || sessRef.current?.reject?.();
+    setInCall(false); setCallSt('');
   };
 
+  const incoming = callStatus.startsWith('Incoming');
+
   return (
-    <div style={s.phone}>
-      <audio ref={remoteAudioRef} autoPlay />
-      <div style={s.header}>
-        <span style={s.ext}>Ext: {extension}</span>
-        <span style={{...s.dot, background: status === 'Registered ✓' ? '#38a169' : '#e53e3e'}} />
-        <span style={s.status}>{status}</span>
+    <div style={s.wrap}>
+      <audio ref={audioRef} autoPlay />
+      <div style={s.statusRow}>
+        <div style={{ ...s.dot, background: registered ? T.success : T.error }} />
+        <span style={s.statusText}>{status}</span>
       </div>
 
-      {callStatus && (
-        <div style={s.callStatus}>{callStatus}</div>
-      )}
+      {callStatus && <div style={s.callBanner}>{callStatus}</div>}
 
       {!inCall && !callStatus && (
-        <div style={s.dialpad}>
-          <input style={s.input} placeholder="Extension to call"
-            value={dialNumber} onChange={e => setDialNumber(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && makeCall()} />
-          <button style={s.callBtn} onClick={makeCall}>📞 Call</button>
+        <div style={s.dialRow}>
+          <input style={s.dialInput} placeholder="Dial extension…" value={dial}
+            onChange={e => setDial(e.target.value)} onKeyDown={e => e.key === 'Enter' && call()} />
+          <button style={s.callBtn} onClick={call} disabled={!registered}>
+            <Icon name="phone" size={16} color="#fff" />
+          </button>
         </div>
       )}
 
-      {callStatus && callStatus.startsWith('Incoming') && !inCall && (
-        <div style={s.actions}>
-          <button style={s.answerBtn} onClick={answerCall}>✅ Answer</button>
-          <button style={s.hangupBtn} onClick={hangup}>❌ Reject</button>
+      {incoming && !inCall && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          <button style={s.answerBtn} onClick={answer}><Icon name="phone" size={15} color="#fff" /> Answer</button>
+          <button style={s.rejectBtn} onClick={hangup}><Icon name="xMark" size={15} color="#fff" /> Reject</button>
         </div>
       )}
 
       {inCall && (
-        <button style={s.hangupBtn} onClick={hangup}>📵 Hang Up</button>
+        <button style={s.hangupBtn} onClick={hangup}>
+          <Icon name="xMark" size={15} color="#fff" /> Hang Up
+        </button>
       )}
     </div>
   );
 }
 
 const s = {
-  phone: { background: '#1a1a2e', borderRadius: 12, padding: 20, color: '#fff', width: 280 },
-  header: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 },
-  ext: { fontWeight: 700, fontSize: 16 },
-  dot: { width: 10, height: 10, borderRadius: '50%', marginLeft: 'auto' },
-  status: { fontSize: 12, color: '#a0aec0' },
-  callStatus: { background: '#2d3748', borderRadius: 8, padding: 12, marginBottom: 12, fontSize: 14, textAlign: 'center' },
-  dialpad: { display: 'flex', gap: 8 },
-  input: { flex: 1, padding: '10px 12px', borderRadius: 8, border: 'none', background: '#2d3748', color: '#fff', fontSize: 14 },
-  callBtn: { padding: '10px 14px', background: '#38a169', border: 'none', borderRadius: 8, color: '#fff', cursor: 'pointer', fontSize: 16 },
-  answerBtn: { flex: 1, padding: 12, background: '#38a169', border: 'none', borderRadius: 8, color: '#fff', cursor: 'pointer', fontWeight: 600 },
-  hangupBtn: { width: '100%', padding: 12, background: '#e53e3e', border: 'none', borderRadius: 8, color: '#fff', cursor: 'pointer', fontWeight: 600, marginTop: 8 },
-  actions: { display: 'flex', gap: 8 },
+  wrap:       { padding: '12px 14px', background: T.sidebar },
+  statusRow:  { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 },
+  dot:        { width: 8, height: 8, borderRadius: '50%', flexShrink: 0 },
+  statusText: { fontSize: 12, color: T.textSub },
+  callBanner: { background: T.surface, border: '1px solid ' + T.border, borderRadius: 8, padding: '8px 12px', fontSize: 13, color: T.text, marginBottom: 10, textAlign: 'center' },
+  dialRow:    { display: 'flex', gap: 8 },
+  dialInput:  { flex: 1, padding: '8px 10px', borderRadius: 7, border: '1px solid ' + T.border, background: T.surface, color: T.text, fontSize: 13 },
+  callBtn:    { width: 36, height: 36, borderRadius: 7, background: T.success, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  answerBtn:  { flex: 1, padding: '8px 0', background: T.success, border: 'none', borderRadius: 7, color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  rejectBtn:  { flex: 1, padding: '8px 0', background: T.error, border: 'none', borderRadius: 7, color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  hangupBtn:  { width: '100%', padding: '9px 0', background: T.error, border: 'none', borderRadius: 7, color: '#fff', fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8 },
 };
