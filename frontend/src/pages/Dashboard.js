@@ -43,6 +43,7 @@ export default function Dashboard() {
   const [page, setPage] = useState('dashboard');
   const [myExtension, setMyExtension] = useState(null);
   const [phoneOpen, setPhoneOpen] = useState(false);
+  const [sipRegistered, setSipRegistered] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -101,19 +102,22 @@ export default function Dashboard() {
           })}
         </nav>
 
-        {/* Softphone toggle */}
+        {/* Softphone toggle — always mounted so SIP UA stays registered */}
         {myExtension && (
           <div style={s.phoneWrap}>
             <button style={s.phoneToggle} onClick={() => setPhoneOpen(o => !o)}>
-              <div style={{ ...s.regDot, background: phoneOpen ? T.success : T.textMuted }} />
+              <div style={{ ...s.regDot, background: sipRegistered ? T.success : T.error }} />
               <span>Ext {myExtension.extension}</span>
               <Icon name="chevronDown" size={14} color={T.textSub} style={{ marginLeft: 'auto', transform: phoneOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
             </button>
-            {phoneOpen && (
-              <div style={s.phoneBody} className="slide-in">
-                <Softphone extension={myExtension.extension} sipPassword={myExtension.sip_password} />
-              </div>
-            )}
+            {/* Never unmount — use display:none to keep UA alive even when panel is closed */}
+            <div style={{ ...s.phoneBody, display: phoneOpen ? 'block' : 'none' }}>
+              <Softphone
+                extension={myExtension.extension}
+                sipPassword={myExtension.sip_password}
+                onRegistered={setSipRegistered}
+              />
+            </div>
           </div>
         )}
 

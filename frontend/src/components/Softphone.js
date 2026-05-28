@@ -20,7 +20,7 @@ function attachAudio(session, audioEl) {
   }
 }
 
-export default function Softphone({ extension, sipPassword }) {
+export default function Softphone({ extension, sipPassword, onRegistered }) {
   const [status, setStatus]   = useState('Connecting…');
   const [registered, setReg]  = useState(false);
   const [callStatus, setCallSt] = useState('');
@@ -64,13 +64,13 @@ export default function Softphone({ extension, sipPassword }) {
       .then(() => {
         const r = new Registerer(ua);
         r.register()
-          .then(() => { setReg(true); setStatus('Registered'); })
-          .catch(() => setStatus('Registration failed'));
+          .then(() => { setReg(true); setStatus('Registered'); onRegistered?.(true); })
+          .catch(() => { setStatus('Registration failed'); onRegistered?.(false); });
       })
       .catch(() => setStatus('Connection failed'));
 
     uaRef.current = ua;
-    return () => { ua.stop(); };
+    return () => { ua.stop(); onRegistered?.(false); };
   }, [extension, sipPassword]);
 
   const call = () => {
