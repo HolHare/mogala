@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { UserAgent, Registerer, Inviter, SessionState } from 'sip.js';
+import { UserAgent, Registerer, Inviter, Invitation, SessionState } from 'sip.js';
 import { T } from '../theme';
 import { Icon } from './Icons';
 
@@ -7,14 +7,27 @@ const WS_SERVER = `wss://${window.location.hostname}/ws`;
 const SIP_DOMAIN = window.location.hostname;
 const ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
 
-export default function Softphone({ extension, sipPassword }) {
-  const [status, setStatus]       = useState('Connecting…');
-  const [registered, setReg]      = useState(false);
-  const [callStatus, setCallSt]   = useState('');
-  const [inCall, setInCall]        = useState(false);
-  const [dial, setDial]           = useState('');
-  const uaRef = useRef(null);
-  const sessRef = useRef(null);
+function attachAudio(session, audioEl) {
+  try {
+    const pc = session.sessionDescriptionHandler?.peerConnection;
+    if (!pc || !audioEl) return;
+    const stream = new MediaStream();
+    pc.getReceivers().forEach(r => { if (r.track) stream.addTrack(r.track); });
+    audioEl.srcObject = stream;
+    audioEl.play().catch(() => {});
+  } catch (e) {
+    console.error('attachAudio:', e);
+  }
+}
+
+export default function Softphone({ extension, sipPassword, onRegistered }) {
+  const [status, setStatus]   = useState('Connecting…');
+  const [registered, setReg]  = useState(false);
+  const [callStatus, setCallSt] = useState('');
+  const [inCall, setInCall]   = useState(false);
+  const [dial, setDial]       = useState('');
+  const uaRef    = useRef(null);
+  const sessRef  = useRef(null);
   const audioRef = useRef(null);
 
   useEffect(() => {
@@ -33,54 +46,86 @@ export default function Softphone({ extension, sipPassword }) {
       onInvite: (inv) => {
         setCallSt(`Incoming: ${inv.remoteIdentity.uri.user}`);
         sessRef.current = inv;
+        // Send 180 Ringing so the caller sees the ring state
+        inv.progress().catch(() => {});
         inv.stateChange.addListener(st => {
-          if (st === SessionState.Terminated) { setInCall(false); setCallSt(''); sessRef.current = null; }
+          if (st === SessionState.Established) {
+            setInCall(true);
+            attachAudio(inv, audioRef.current);
+          }
+          if (st === SessionState.Terminated) {
+            setInCall(false); setCallSt(''); sessRef.current = null;
+          }
         });
       },
     };
 
     ua.start()
-      .then(() => { const r = new Registerer(ua); r.register().then(() => { setReg(true); setStatus('Registered'); }).catch(e => setStatus(`Reg failed`)); })
+      .then(() => {
+        const r = new Registerer(ua);
+        r.register()
+          .then(() => { setReg(true); setStatus('Registered'); onRegistered?.(true); })
+          .catch(() => { setStatus('Registration failed'); onRegistered?.(false); });
+      })
       .catch(() => setStatus('Connection failed'));
 
     uaRef.current = ua;
-    return () => { ua.stop(); };
+    return () => { ua.stop(); onRegistered?.(false); };
   }, [extension, sipPassword]);
 
   const call = () => {
     if (!dial || !uaRef.current) return;
     const inv = new Inviter(uaRef.current, UserAgent.makeURI(`sip:${dial}@${SIP_DOMAIN}`), {
-      sessionDescriptionHandlerOptions: { constraints: { audio: true, video: false }, peerConnectionConfiguration: ICE },
+      sessionDescriptionHandlerOptions: {
+        constraints: { audio: true, video: false },
+        peerConnectionConfiguration: ICE,
+      },
     });
     inv.stateChange.addListener(st => {
       if (st === SessionState.Established) {
         setInCall(true); setCallSt(`In call: ${dial}`);
-        const stream = new MediaStream();
-        inv.sessionDescriptionHandler.peerConnection.getReceivers().forEach(r => r.track && stream.addTrack(r.track));
-        if (audioRef.current) { audioRef.current.srcObject = stream; audioRef.current.play(); }
+        attachAudio(inv, audioRef.current);
       }
-      if (st === SessionState.Terminated) { setInCall(false); setCallSt(''); sessRef.current = null; }
+      if (st === SessionState.Terminated) {
+        setInCall(false); setCallSt(''); sessRef.current = null;
+      }
     });
-    inv.invite();
     sessRef.current = inv;
     setCallSt(`Calling ${dial}…`);
+    inv.invite().catch(err => {
+      console.error('INVITE failed:', err);
+      setCallSt('Call failed — check microphone permission');
+      sessRef.current = null;
+      setTimeout(() => setCallSt(''), 4000);
+    });
   };
 
   const answer = () => {
-    if (!sessRef.current) return;
-    sessRef.current.accept({
-      sessionDescriptionHandlerOptions: { constraints: { audio: true, video: false }, peerConnectionConfiguration: ICE },
-    }).then(() => {
-      setInCall(true);
-      const stream = new MediaStream();
-      sessRef.current.sessionDescriptionHandler.peerConnection.getReceivers().forEach(r => r.track && stream.addTrack(r.track));
-      if (audioRef.current) { audioRef.current.srcObject = stream; audioRef.current.play(); }
+    const s = sessRef.current;
+    if (!s) return;
+    s.accept({
+      sessionDescriptionHandlerOptions: {
+        constraints: { audio: true, video: false },
+        peerConnectionConfiguration: ICE,
+      },
+    }).catch(err => {
+      console.error('accept failed:', err);
+      setCallSt('Answer failed');
+      setTimeout(() => setCallSt(''), 3000);
     });
   };
 
   const hangup = () => {
-    sessRef.current?.bye?.() || sessRef.current?.reject?.();
-    setInCall(false); setCallSt('');
+    const s = sessRef.current;
+    if (!s) return;
+    if (s.state === SessionState.Established) {
+      s.bye().catch(() => {});
+    } else if (s instanceof Inviter) {
+      s.cancel().catch(() => {});
+    } else if (s instanceof Invitation) {
+      s.reject().catch(() => {});
+    }
+    setInCall(false); setCallSt(''); sessRef.current = null;
   };
 
   const incoming = callStatus.startsWith('Incoming');
