@@ -117,7 +117,8 @@ jobs:
             ENVEOF
             sed -i 's/^ *//' .env
 
-            # Generate htpasswd for Adminer — never needs to be done manually
+            # Generate htpasswd for Adminer — remove any stale directory Docker may have created
+            rm -rf htpasswd
             echo "admin:$(openssl passwd -apr1 '${{ secrets.ADMINER_PASSWORD }}')" > htpasswd
             chmod 600 htpasswd
 

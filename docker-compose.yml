@@ -37,9 +37,9 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - /home/lynden/mogala/certs:/certs:ro
+      - ./certs:/certs:ro
       - /var/log/nginx:/var/log/nginx
-      - /home/lynden/mogala/htpasswd:/etc/nginx/htpasswd:ro
+      - ./htpasswd:/etc/nginx/htpasswd:ro
     depends_on:
       - frontend
       - kamailio
@@ -58,7 +58,7 @@ services:
     environment:
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
     volumes:
-      - /home/lynden/mogala/certs:/certs:ro
+      - ./certs:/certs:ro
     depends_on:
       - mysql
       - rtpproxy
