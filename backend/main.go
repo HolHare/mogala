@@ -15,7 +15,7 @@ import (
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
@@ -30,6 +30,7 @@ func main() {
 	defer database.Close()
 
 	db.Migrate(database)
+	db.SeedSuperAdmin(database)
 
 	r := mux.NewRouter()
 	r.Use(corsMiddleware)
@@ -41,6 +42,7 @@ func main() {
 	protected.Use(middleware.JWTAuth)
 
 	protected.HandleFunc("/me", handlers.Me(database)).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/logout", handlers.Logout(database)).Methods("POST", "OPTIONS")
 
 	// Extensions
 	protected.HandleFunc("/extensions", handlers.GetExtensions(database)).Methods("GET", "OPTIONS")
@@ -70,6 +72,27 @@ func main() {
 	protected.HandleFunc("/trunks", handlers.CreateTrunk(database)).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/trunks", handlers.UpdateTrunk(database)).Methods("PUT", "OPTIONS")
 	protected.HandleFunc("/trunks", handlers.DeleteTrunk(database)).Methods("DELETE", "OPTIONS")
+
+	// Superadmin routes
+	protected.HandleFunc("/admin/tenants", handlers.GetTenants(database)).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/admin/tenants/{id}/users", handlers.GetTenantUsers(database)).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/admin/tenants/{id}/impersonate", handlers.ImpersonateTenant(database)).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/admin/tenants/{id}", handlers.UpdateTenant(database)).Methods("PATCH", "OPTIONS")
+
+	// Disposition codes (admin CRUD)
+	protected.HandleFunc("/admin/disposition-codes", handlers.GetDispositionCodes(database)).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/admin/disposition-codes", handlers.CreateDispositionCode(database)).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/admin/disposition-codes", handlers.UpdateDispositionCode(database)).Methods("PUT", "OPTIONS")
+	protected.HandleFunc("/admin/disposition-codes", handlers.DeleteDispositionCode(database)).Methods("DELETE", "OPTIONS")
+
+	// Agent routes
+	protected.HandleFunc("/agent/status", handlers.GetAgentStatus(database)).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/agent/status", handlers.UpdateAgentStatus(database)).Methods("PUT", "OPTIONS")
+	protected.HandleFunc("/agent/disposition", handlers.SubmitDisposition(database)).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/agent/shift", handlers.GetShiftSummary(database)).Methods("GET", "OPTIONS")
+
+	// Supervisor routes
+	protected.HandleFunc("/supervisor/agents", handlers.GetAgentStatuses(database)).Methods("GET", "OPTIONS")
 
 	port := os.Getenv("PORT")
 	if port == "" {

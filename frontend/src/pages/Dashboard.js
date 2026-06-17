@@ -4,6 +4,8 @@ import { request } from '../api';
 import { T } from '../theme';
 import { Icon } from '../components/Icons';
 import Softphone from '../components/Softphone';
+import AgentToolbar from '../components/AgentToolbar';
+import DispositionModal from '../components/DispositionModal';
 import Extensions from './Extensions';
 import CallLogs from './CallLogs';
 import PhoneNumbers from './PhoneNumbers';
@@ -13,43 +15,66 @@ import Billing from './Billing';
 import IVR from './IVR';
 import CallFlows from './CallFlows';
 import RingGroups from './RingGroups';
+import SuperAdmin from './SuperAdmin';
+import Wallboard from './Wallboard';
+import DispositionCodes from './DispositionCodes';
 
 const NAV = [
   { section: 'OVERVIEW', items: [
-    { key: 'dashboard', label: 'Dashboard',         icon: 'home' },
+    { key: 'dashboard',  label: 'Dashboard',            icon: 'home' },
   ]},
   { section: 'COMMUNICATIONS', items: [
-    { key: 'extensions', label: 'Extensions',        icon: 'phone' },
-    { key: 'numbers',    label: 'Phone Numbers',     icon: 'hash' },
-    { key: 'calllogs',   label: 'Call Logs',         icon: 'list' },
+    { key: 'extensions', label: 'Extensions',            icon: 'phone' },
+    { key: 'numbers',    label: 'Phone Numbers',         icon: 'hash' },
+    { key: 'calllogs',   label: 'Call Logs',             icon: 'list' },
   ]},
   { section: 'CALL MANAGEMENT', items: [
-    { key: 'ringgroups', label: 'Ring Groups',       icon: 'userGroup' },
+    { key: 'ringgroups', label: 'Ring Groups',           icon: 'userGroup' },
     { key: 'ivr',        label: 'IVR / Auto-Attendant', icon: 'menuAlt' },
-    { key: 'callflows',  label: 'Call Flows',        icon: 'share' },
+    { key: 'callflows',  label: 'Call Flows',            icon: 'share' },
   ]},
   { section: 'ADMIN', adminOnly: true, items: [
-    { key: 'users',      label: 'Users',             icon: 'users' },
-    { key: 'trunks',     label: 'SIP Trunks',        icon: 'server' },
+    { key: 'users',      label: 'Users',                 icon: 'users' },
+    { key: 'trunks',     label: 'SIP Trunks',            icon: 'server' },
+    { key: 'dispcodes',  label: 'Disposition Codes',     icon: 'list' },
   ]},
   { section: 'ACCOUNT', items: [
-    { key: 'billing',    label: 'Billing',           icon: 'creditCard' },
-    { key: 'settings',   label: 'Settings',          icon: 'cog' },
+    { key: 'billing',    label: 'Billing',               icon: 'creditCard' },
+    { key: 'settings',   label: 'Settings',              icon: 'cog' },
   ]},
 ];
 
+// Superadmin sees a completely different nav
+const SUPERADMIN_NAV = [
+  { section: 'SUPER ADMIN', items: [
+    { key: 'tenants',    label: 'Tenants',               icon: 'building' },
+    { key: 'settings',   label: 'Settings',              icon: 'cog' },
+  ]},
+];
+
+// Supervisor gets a wallboard nav item added
+const SUPERVISOR_EXTRA = { key: 'wallboard', label: 'Wallboard', icon: 'signal', section: 'SUPERVISOR' };
+
 export default function Dashboard() {
-  const [user, setUser] = useState(null);
-  const [page, setPage] = useState('dashboard');
+  const [user, setUser]               = useState(null);
+  const [page, setPage]               = useState('dashboard');
   const [myExtension, setMyExtension] = useState(null);
-  const [phoneOpen, setPhoneOpen] = useState(false);
+  const [phoneOpen, setPhoneOpen]     = useState(false);
   const [sipRegistered, setSipRegistered] = useState(false);
+  const [showDisposition, setShowDisposition] = useState(false);
   const navigate = useNavigate();
+
+  // Impersonation state
+  const impersonating = sessionStorage.getItem('impersonating');
 
   useEffect(() => {
     request('/api/me').then(data => {
-      if (data.error) { localStorage.removeItem('token'); navigate('/'); }
-      else setUser(data);
+      if (data.error) { localStorage.removeItem('token'); navigate('/'); return; }
+      setUser(data);
+      // Superadmin default page
+      if (data.role === 'superadmin') setPage('tenants');
+      // Supervisor default to wallboard
+      else if (data.role === 'supervisor') setPage('wallboard');
     });
     request('/api/users/my-extension').then(data => {
       if (data && data.id) { setMyExtension(data); return; }
@@ -59,7 +84,28 @@ export default function Dashboard() {
     });
   }, [navigate]);
 
-  const logout = () => { localStorage.removeItem('token'); navigate('/'); };
+  const logout = async () => {
+    await request('/api/logout', { method: 'POST' }).catch(() => {});
+    if (impersonating) {
+      const orig = sessionStorage.getItem('superadmin_token');
+      sessionStorage.removeItem('superadmin_token');
+      sessionStorage.removeItem('impersonating');
+      localStorage.setItem('token', orig);
+      window.location.reload();
+      return;
+    }
+    localStorage.removeItem('token');
+    navigate('/');
+  };
+
+  const exitImpersonation = () => {
+    const orig = sessionStorage.getItem('superadmin_token');
+    if (!orig) return;
+    sessionStorage.removeItem('superadmin_token');
+    sessionStorage.removeItem('impersonating');
+    localStorage.setItem('token', orig);
+    window.location.reload();
+  };
 
   if (!user) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', flexDirection: 'column', gap: 16 }}>
@@ -68,10 +114,16 @@ export default function Dashboard() {
     </div>
   );
 
-  const isAdmin = user.role === 'admin' || user.role === 'superadmin';
-  const roleColor = T.roles[user.role] || T.textSub;
-  const initials = ((user.firstName?.[0] || '') + (user.lastName?.[0] || '') || user.email[0]).toUpperCase();
-  const pageTitle = NAV.flatMap(g => g.items).find(i => i.key === page)?.label || 'Dashboard';
+  const isSuperAdmin  = user.role === 'superadmin';
+  const isAdmin       = user.role === 'admin' || isSuperAdmin;
+  const isSupervisor  = user.role === 'supervisor' || isAdmin;
+  const isAgent       = user.role === 'agent';
+  const roleColor     = T.roles[user.role] || T.textSub;
+  const initials      = ((user.firstName?.[0] || '') + (user.lastName?.[0] || '') || user.email[0]).toUpperCase();
+
+  const navGroups = isSuperAdmin ? SUPERADMIN_NAV : NAV;
+  const pageTitle = [...navGroups.flatMap(g => g.items), SUPERVISOR_EXTRA]
+    .find(i => i.key === page)?.label || 'Dashboard';
 
   return (
     <div style={s.root}>
@@ -79,13 +131,25 @@ export default function Dashboard() {
       <div style={s.sidebar}>
         {/* Logo */}
         <div style={s.logoWrap}>
-          <div style={s.logoMark}>M</div>
-          <span style={s.logoText}>Mogala</span>
+          <div style={s.logoMark}>{isSuperAdmin ? <Icon name="shield" size={16} color="#fff" strokeWidth={2} /> : 'M'}</div>
+          <span style={s.logoText}>{isSuperAdmin ? 'Super Admin' : 'Mogala'}</span>
         </div>
 
         {/* Nav */}
         <nav style={s.nav}>
-          {NAV.map(group => {
+          {/* Supervisor wallboard extra item */}
+          {isSupervisor && !isSuperAdmin && (
+            <div style={s.navGroup}>
+              <div style={s.navSection}>SUPERVISOR</div>
+              <button style={{ ...s.navItem, ...(page === 'wallboard' ? s.navActive : {}) }}
+                onClick={() => setPage('wallboard')}>
+                <Icon name="signal" size={16} color={page === 'wallboard' ? T.primaryHov : T.textSub} />
+                <span>Wallboard</span>
+              </button>
+            </div>
+          )}
+
+          {navGroups.map(group => {
             if (group.adminOnly && !isAdmin) return null;
             return (
               <div key={group.section} style={s.navGroup}>
@@ -102,8 +166,11 @@ export default function Dashboard() {
           })}
         </nav>
 
+        {/* Agent toolbar (agents and supervisors only) */}
+        {(isAgent || user.role === 'supervisor') && <AgentToolbar />}
+
         {/* Softphone toggle — always mounted so SIP UA stays registered */}
-        {myExtension && (
+        {myExtension && !isSuperAdmin && (
           <div style={s.phoneWrap}>
             <button style={s.phoneToggle} onClick={() => setPhoneOpen(o => !o)}>
               <div style={{ ...s.regDot, background: sipRegistered ? T.success : T.error }} />
@@ -116,6 +183,7 @@ export default function Dashboard() {
                 extension={myExtension.extension}
                 sipPassword={myExtension.sip_password}
                 onRegistered={setSipRegistered}
+                onCallEnded={isAgent ? () => setShowDisposition(true) : undefined}
               />
             </div>
           </div>
@@ -128,7 +196,7 @@ export default function Dashboard() {
             <div style={s.userName}>{user.firstName} {user.lastName}</div>
             <div style={{ ...T.badge_s(roleColor), display: 'inline-flex' }}>{user.role}</div>
           </div>
-          <button style={s.logoutBtn} onClick={logout} title="Logout">
+          <button style={s.logoutBtn} onClick={logout} title={impersonating ? 'Exit Impersonation' : 'Logout'}>
             <Icon name="logout" size={16} color={T.textSub} />
           </button>
         </div>
@@ -136,6 +204,17 @@ export default function Dashboard() {
 
       {/* Main */}
       <div style={s.main}>
+        {/* Impersonation banner */}
+        {impersonating && (
+          <div style={s.impBanner}>
+            <Icon name="eye" size={14} color={T.warning} />
+            <span>Impersonating: <strong>{impersonating}</strong> — changes affect this tenant</span>
+            <button style={{ ...T.btn_s('ghost'), padding: '4px 12px', fontSize: 12, marginLeft: 'auto' }} onClick={exitImpersonation}>
+              Exit Impersonation
+            </button>
+          </div>
+        )}
+
         {/* Topbar */}
         <div style={s.topbar}>
           <h2 style={s.pageTitle}>{pageTitle}</h2>
@@ -148,7 +227,7 @@ export default function Dashboard() {
 
         {/* Content */}
         <div style={s.content}>
-          {page === 'dashboard'  && <DashboardHome setPage={setPage} />}
+          {page === 'dashboard'  && <DashboardHome setPage={setPage} role={user.role} />}
           {page === 'extensions' && <Extensions />}
           {page === 'calllogs'   && <CallLogs />}
           {page === 'numbers'    && <PhoneNumbers />}
@@ -159,16 +238,23 @@ export default function Dashboard() {
           {page === 'callflows'  && <CallFlows />}
           {page === 'ringgroups' && <RingGroups />}
           {page === 'settings'   && <Settings />}
+          {page === 'tenants'    && <SuperAdmin />}
+          {page === 'wallboard'  && <Wallboard />}
+          {page === 'dispcodes'  && <DispositionCodes />}
         </div>
       </div>
+
+      {/* Post-call disposition modal */}
+      {showDisposition && <DispositionModal onClose={() => setShowDisposition(false)} />}
     </div>
   );
 }
 
-function DashboardHome({ setPage }) {
+function DashboardHome({ setPage, role }) {
   const [stats, setStats] = useState({ extensions: 0, numbers: 0, callLogs: 0 });
   const [recentCalls, setRecentCalls] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [shift, setShift] = useState(null);
 
   useEffect(() => {
     Promise.all([
@@ -183,7 +269,11 @@ function DashboardHome({ setPage }) {
       setRecentCalls(c.recent);
       setLoading(false);
     });
-  }, []);
+
+    if (role === 'agent') {
+      request('/api/agent/shift').then(d => d.login_at ? setShift(d) : null);
+    }
+  }, [role]);
 
   const statCards = [
     { label: 'Extensions',    value: stats.extensions, icon: 'phone',     color: T.primary,  key: 'extensions' },
@@ -196,6 +286,21 @@ function DashboardHome({ setPage }) {
 
   return (
     <div className="fade-up">
+      {/* Agent shift summary */}
+      {shift && (
+        <div style={{ ...T.card_s(), marginBottom: 16, display: 'flex', gap: 24, alignItems: 'center' }}>
+          <Icon name="clock" size={20} color={T.primary} />
+          <div>
+            <span style={{ fontSize: 12, color: T.textSub, fontWeight: 600 }}>SHIFT TODAY</span>
+            <div style={{ fontSize: 14, color: T.text, marginTop: 2 }}>
+              Logged in {new Date(shift.login_at).toLocaleTimeString()} ·&nbsp;
+              <strong style={{ color: T.success }}>{shift.call_count} call{shift.call_count !== 1 ? 's' : ''}</strong> ·&nbsp;
+              {Math.floor(shift.total_duration / 60)} min talk time
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={s2.statGrid}>
         {statCards.map(c => (
           <div key={c.label} style={s2.statCard} onClick={() => c.key && setPage(c.key)}>
@@ -292,6 +397,7 @@ function Settings() {
 
 const s = {
   root: { display: 'flex', minHeight: '100vh', background: T.bg },
+  impBanner: { display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(245,158,11,0.12)', borderBottom: '1px solid rgba(245,158,11,0.25)', padding: '10px 24px', fontSize: 13, color: T.warning, flexShrink: 0 },
   sidebar: { width: 248, background: T.sidebar, borderRight: '1px solid ' + T.border, display: 'flex', flexDirection: 'column', flexShrink: 0, position: 'sticky', top: 0, height: '100vh', overflowY: 'auto' },
   logoWrap: { display: 'flex', alignItems: 'center', gap: 10, padding: '20px 20px 16px' },
   logoMark: { width: 32, height: 32, borderRadius: 9, background: 'linear-gradient(135deg, #6366f1, #818cf8)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 16, flexShrink: 0 },
