@@ -107,6 +107,7 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
+    command: php -d mysqlnd.get_server_public_key=on -S [::]:8080 -t /var/www/html
     environment:
       ADMINER_DEFAULT_SERVER: mogala-mysql
     depends_on:
