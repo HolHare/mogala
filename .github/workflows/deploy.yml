@@ -107,10 +107,20 @@ jobs:
           script: |
             set -e
             cd /home/${{ secrets.VPS_USER }}/mogala
-            export MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
-            export MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
-            export JWT_SECRET=${{ secrets.JWT_SECRET }}
-            export EXTERNAL_IP=${{ secrets.VPS_IP }}
+
+            # Write .env so docker compose always has correct credentials
+            cat > .env << 'ENVEOF'
+            MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
+            MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            EXTERNAL_IP=${{ secrets.VPS_IP }}
+            ENVEOF
+            sed -i 's/^ *//' .env
+
+            # Generate htpasswd for Adminer — never needs to be done manually
+            echo "admin:$(openssl passwd -apr1 '${{ secrets.ADMINER_PASSWORD }}')" > htpasswd
+            chmod 600 htpasswd
+
             docker-compose pull
             docker-compose up -d --remove-orphans
             docker-compose ps
