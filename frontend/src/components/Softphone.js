@@ -20,7 +20,7 @@ function attachAudio(session, audioEl) {
   }
 }
 
-export default function Softphone({ extension, sipPassword, onRegistered }) {
+export default function Softphone({ extension, sipPassword, onRegistered, onCallEnded }) {
   const [status, setStatus]   = useState('Connecting…');
   const [registered, setReg]  = useState(false);
   const [callStatus, setCallSt] = useState('');
@@ -48,13 +48,16 @@ export default function Softphone({ extension, sipPassword, onRegistered }) {
         sessRef.current = inv;
         // Send 180 Ringing so the caller sees the ring state
         inv.progress().catch(() => {});
+        let established = false;
         inv.stateChange.addListener(st => {
           if (st === SessionState.Established) {
+            established = true;
             setInCall(true);
             attachAudio(inv, audioRef.current);
           }
           if (st === SessionState.Terminated) {
             setInCall(false); setCallSt(''); sessRef.current = null;
+            if (established) onCallEnded?.();
           }
         });
       },
@@ -81,13 +84,16 @@ export default function Softphone({ extension, sipPassword, onRegistered }) {
         peerConnectionConfiguration: ICE,
       },
     });
+    let established = false;
     inv.stateChange.addListener(st => {
       if (st === SessionState.Established) {
+        established = true;
         setInCall(true); setCallSt(`In call: ${dial}`);
         attachAudio(inv, audioRef.current);
       }
       if (st === SessionState.Terminated) {
         setInCall(false); setCallSt(''); sessRef.current = null;
+        if (established) onCallEnded?.();
       }
     });
     sessRef.current = inv;

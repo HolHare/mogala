@@ -34,7 +34,7 @@ export default function Login() {
         <p style={s.sub}>Sign in to your workspace</p>
 
         <div style={s.fieldGroup}>
-          <label style={s.label}>Company Domain</label>
+          <label style={s.label}>Company Domain <span style={{ color: T.textMuted, fontWeight: 400 }}>(leave blank for super admin)</span></label>
           <input style={s.input} placeholder="e.g. acme"
             value={form.domain} onChange={e => setForm({ ...form, domain: e.target.value })} />
         </div>
