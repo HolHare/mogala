@@ -39,7 +39,6 @@ services:
     volumes:
       - ./certs:/certs:ro
       - /var/log/nginx:/var/log/nginx
-      - ./htpasswd:/etc/nginx/htpasswd:ro
     depends_on:
       - frontend
       - kamailio

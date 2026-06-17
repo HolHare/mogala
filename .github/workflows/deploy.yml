@@ -117,11 +117,6 @@ jobs:
             ENVEOF
             sed -i 's/^ *//' .env
 
-            # Generate htpasswd for Adminer — remove any stale directory Docker may have created
-            rm -rf htpasswd
-            echo "admin:$(openssl passwd -apr1 '${{ secrets.ADMINER_PASSWORD }}')" > htpasswd
-            chmod 600 htpasswd
-
             # Generate self-signed SSL cert if missing
             mkdir -p certs
             if [ ! -f certs/cert.pem ] || [ ! -f certs/key.pem ]; then
