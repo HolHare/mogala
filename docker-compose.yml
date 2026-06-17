@@ -102,7 +102,7 @@ services:
       - mogala-net
 
   adminer:
-    image: ghcr.io/holhare/mogala/adminer:latest
+    image: adminer:latest
     container_name: mogala-adminer
     restart: unless-stopped
     ports:
