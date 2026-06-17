@@ -140,17 +140,33 @@ jobs:
             # Wait for MySQL to be ready
             echo "Waiting for MySQL..."
             for i in $(seq 1 30); do
+              docker exec mogala-mysql mysqladmin ping -uroot --password="" --silent 2>/dev/null && break
               docker exec mogala-mysql mysqladmin ping -uroot -p"${{ secrets.MYSQL_ROOT_PASSWORD }}" --silent 2>/dev/null && break
               sleep 2
             done
 
-            # Sync passwords to match .env secrets
-            docker exec mogala-mysql mysql -uroot -p"${{ secrets.MYSQL_ROOT_PASSWORD }}" -e "
-              ALTER USER 'root'@'%' IDENTIFIED BY '${{ secrets.MYSQL_ROOT_PASSWORD }}';
-              ALTER USER 'root'@'localhost' IDENTIFIED BY '${{ secrets.MYSQL_ROOT_PASSWORD }}';
-              ALTER USER 'mogala_user'@'%' IDENTIFIED BY '${{ secrets.MYSQL_PASSWORD }}';
-              FLUSH PRIVILEGES;
-            " 2>/dev/null || true
+            # Detect which root password works and sync all passwords
+            echo "--- MySQL diagnostics ---"
+            if docker exec mogala-mysql mysql -uroot --password="" -e "SELECT 'root_empty_password_works';" 2>/dev/null; then
+              echo "Root has EMPTY password — setting correct passwords now"
+              docker exec mogala-mysql mysql -uroot --password="" -e "
+                ALTER USER 'root'@'localhost' IDENTIFIED BY '${{ secrets.MYSQL_ROOT_PASSWORD }}';
+                ALTER USER 'root'@'%' IDENTIFIED BY '${{ secrets.MYSQL_ROOT_PASSWORD }}';
+                ALTER USER 'mogala_user'@'%' IDENTIFIED BY '${{ secrets.MYSQL_PASSWORD }}';
+                FLUSH PRIVILEGES;
+                SELECT user, host, plugin FROM mysql.user WHERE user IN ('root','mogala_user');
+              "
+            elif docker exec mogala-mysql mysql -uroot -p"${{ secrets.MYSQL_ROOT_PASSWORD }}" -e "SELECT 'root_secret_password_works';" 2>/dev/null; then
+              echo "Root password matches secret — syncing mogala_user"
+              docker exec mogala-mysql mysql -uroot -p"${{ secrets.MYSQL_ROOT_PASSWORD }}" -e "
+                ALTER USER 'mogala_user'@'%' IDENTIFIED BY '${{ secrets.MYSQL_PASSWORD }}';
+                FLUSH PRIVILEGES;
+                SELECT user, host, plugin FROM mysql.user WHERE user IN ('root','mogala_user');
+              "
+            else
+              echo "ERROR: Cannot connect to MySQL as root with any known password"
+            fi
+            echo "--- End diagnostics ---"
 
             docker-compose ps
 
