@@ -133,31 +133,45 @@ jobs:
             # Wait for MySQL to be ready
             echo "Waiting for MySQL..."
             for i in $(seq 1 30); do
-              docker exec mogala-mysql mysqladmin ping -uroot --password="" --silent 2>/dev/null && break
-              docker exec mogala-mysql mysqladmin ping -uroot -p"${{ secrets.MYSQL_ROOT_PASSWORD }}" --silent 2>/dev/null && break
+              docker exec -e MYSQL_PWD="" mogala-mysql mysqladmin ping -uroot --silent 2>/dev/null && break
+              docker exec -e MYSQL_PWD="${{ secrets.MYSQL_ROOT_PASSWORD }}" mogala-mysql mysqladmin ping -uroot --silent 2>/dev/null && break
               sleep 2
             done
 
-            # Detect which root password works and sync all passwords
+            # Find working root password then force-sync ALL passwords
             echo "--- MySQL diagnostics ---"
-            if docker exec mogala-mysql mysql -uroot --password="" -e "SELECT 'root_empty_password_works';" 2>/dev/null; then
-              echo "Root has EMPTY password — setting correct passwords now"
-              docker exec mogala-mysql mysql -uroot --password="" -e "
+            ROOT_CONNECTED=false
+            ROOT_PW=""
+            if docker exec -e MYSQL_PWD="" mogala-mysql mysql -uroot -e "SELECT 'root_empty_pw';" 2>/dev/null; then
+              ROOT_CONNECTED=true
+              ROOT_PW=""
+              echo "Root: EMPTY password"
+            elif docker exec -e MYSQL_PWD="${{ secrets.MYSQL_ROOT_PASSWORD }}" mogala-mysql mysql -uroot -e "SELECT 'root_secret_pw';" 2>/dev/null; then
+              ROOT_CONNECTED=true
+              ROOT_PW="${{ secrets.MYSQL_ROOT_PASSWORD }}"
+              echo "Root: secret password matches"
+            else
+              echo "ERROR: Cannot connect as root with any known password"
+            fi
+
+            if [ "$ROOT_CONNECTED" = "true" ]; then
+              echo "Force-syncing all passwords..."
+              docker exec -e MYSQL_PWD="$ROOT_PW" mogala-mysql mysql -uroot -e "
                 ALTER USER 'root'@'localhost' IDENTIFIED BY '${{ secrets.MYSQL_ROOT_PASSWORD }}';
                 ALTER USER 'root'@'%' IDENTIFIED BY '${{ secrets.MYSQL_ROOT_PASSWORD }}';
+                CREATE USER IF NOT EXISTS 'mogala_user'@'%' IDENTIFIED BY '${{ secrets.MYSQL_PASSWORD }}';
                 ALTER USER 'mogala_user'@'%' IDENTIFIED BY '${{ secrets.MYSQL_PASSWORD }}';
+                GRANT ALL PRIVILEGES ON mogala.* TO 'mogala_user'@'%';
                 FLUSH PRIVILEGES;
                 SELECT user, host, plugin FROM mysql.user WHERE user IN ('root','mogala_user');
-              "
-            elif docker exec mogala-mysql mysql -uroot -p"${{ secrets.MYSQL_ROOT_PASSWORD }}" -e "SELECT 'root_secret_password_works';" 2>/dev/null; then
-              echo "Root password matches secret — syncing mogala_user"
-              docker exec mogala-mysql mysql -uroot -p"${{ secrets.MYSQL_ROOT_PASSWORD }}" -e "
-                ALTER USER 'mogala_user'@'%' IDENTIFIED BY '${{ secrets.MYSQL_PASSWORD }}';
-                FLUSH PRIVILEGES;
-                SELECT user, host, plugin FROM mysql.user WHERE user IN ('root','mogala_user');
-              "
-            else
-              echo "ERROR: Cannot connect to MySQL as root with any known password"
+              " 2>&1 && echo "Password sync OK" || echo "ERROR: password sync failed"
+
+              # Verify mogala_user can actually log in
+              echo "--- Verifying mogala_user login ---"
+              docker exec -e MYSQL_PWD="${{ secrets.MYSQL_PASSWORD }}" mogala-mysql \
+                mysql -umogala_user mogala -e "SELECT 'mogala_user_login_OK';" 2>&1 \
+                && echo "SUCCESS: mogala_user can connect" \
+                || echo "FAIL: mogala_user still cannot connect"
             fi
             echo "--- End diagnostics ---"
 
