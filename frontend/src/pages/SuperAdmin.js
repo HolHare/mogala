@@ -12,6 +12,7 @@ export default function SuperAdmin() {
 
   const load = () => {
     request('/api/admin/tenants').then(d => {
+      if (d.error) { flash(d.error, 'error'); setLoading(false); return; }
       setTenants(Array.isArray(d) ? d : []);
       setLoading(false);
     });
@@ -27,8 +28,9 @@ export default function SuperAdmin() {
   const openDetail = async (tenant) => {
     setDetailLoading(true);
     setDetail({ tenant, users: [] });
-    const users = await request(`/api/admin/tenants/${tenant.id}/users`);
-    setDetail({ tenant, users: Array.isArray(users) ? users : [] });
+    const data = await request(`/api/admin/tenants/${tenant.id}/users`);
+    if (data.error) { flash(data.error, 'error'); setDetail(null); setDetailLoading(false); return; }
+    setDetail({ tenant, users: Array.isArray(data) ? data : [] });
     setDetailLoading(false);
   };
 
@@ -44,10 +46,11 @@ export default function SuperAdmin() {
   const toggleSuspend = async (tenant) => {
     const action = tenant.suspended ? 'activate' : 'suspend';
     if (!window.confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} tenant "${tenant.name}"?`)) return;
-    await request(`/api/admin/tenants/${tenant.id}`, {
+    const data = await request(`/api/admin/tenants/${tenant.id}`, {
       method: 'PATCH',
       body: JSON.stringify({ suspended: !tenant.suspended }),
     });
+    if (data.error) { flash(data.error, 'error'); return; }
     flash(`Tenant ${action}d`);
     load();
   };

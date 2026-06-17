@@ -11,6 +11,7 @@ env:
 jobs:
   build:
     runs-on: self-hosted
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write
@@ -32,6 +33,7 @@ jobs:
 
       - name: Build and push Go backend
         uses: docker/build-push-action@v5
+        timeout-minutes: 15
         with:
           context: ./backend
           push: true
@@ -39,6 +41,7 @@ jobs:
 
       - name: Build and push React frontend
         uses: docker/build-push-action@v5
+        timeout-minutes: 15
         with:
           context: ./frontend
           push: true
@@ -46,6 +49,7 @@ jobs:
 
       - name: Build and push Nginx
         uses: docker/build-push-action@v5
+        timeout-minutes: 10
         with:
           context: ./nginx
           push: true
@@ -53,6 +57,7 @@ jobs:
 
       - name: Build and push Kamailio
         uses: docker/build-push-action@v5
+        timeout-minutes: 15
         with:
           context: ./kamailio
           push: true
@@ -60,20 +65,28 @@ jobs:
 
       - name: Build and push Asterisk
         uses: docker/build-push-action@v5
+        timeout-minutes: 15
         with:
           context: ./asterisk
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/${{ github.event.repository.name }}/asterisk:latest
 
+      - name: Notify build failure
+        if: failure()
+        run: |
+          echo "::error::Build failed on commit ${{ github.sha }} by ${{ github.actor }}"
+
   deploy:
     needs: build
     runs-on: self-hosted
+    timeout-minutes: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Copy docker-compose to VPS
         uses: appleboy/scp-action@v0.1.7
+        timeout-minutes: 5
         with:
           host: ${{ secrets.VPS_IP }}
           username: ${{ secrets.VPS_USER }}
@@ -84,12 +97,15 @@ jobs:
 
       - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1.0.3
+        timeout-minutes: 10
         with:
           host: ${{ secrets.VPS_IP }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
+          command_timeout: 8m
           script: |
+            set -e
             cd /home/${{ secrets.VPS_USER }}/mogala
             export MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}
             export MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
@@ -97,3 +113,9 @@ jobs:
             export EXTERNAL_IP=${{ secrets.VPS_IP }}
             docker-compose pull
             docker-compose up -d --remove-orphans
+            docker-compose ps
+
+      - name: Notify deploy failure
+        if: failure()
+        run: |
+          echo "::error::Deploy failed on commit ${{ github.sha }} — check VPS connectivity and docker-compose logs"

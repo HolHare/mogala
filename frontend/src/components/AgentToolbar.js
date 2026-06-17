@@ -25,6 +25,7 @@ export default function AgentToolbar() {
   const [open, setOpen]         = useState(false);
   const [reasonInput, setReasonInput] = useState('');
   const [pendingStatus, setPendingStatus] = useState(null);
+  const [error, setError]       = useState('');
   const dropRef = useRef(null);
 
   // Load current status on mount
@@ -50,10 +51,16 @@ export default function AgentToolbar() {
   }, []);
 
   const applyStatus = async (value, rsn = '') => {
-    await request('/api/agent/status', {
+    setError('');
+    const data = await request('/api/agent/status', {
       method: 'PUT',
       body: JSON.stringify({ status: value, reason: rsn }),
     });
+    if (data.error) {
+      setError(data.error);
+      setTimeout(() => setError(''), 4000);
+      return;
+    }
     setStatus(value);
     setReason(rsn);
     setChangedAt(new Date());
@@ -119,6 +126,8 @@ export default function AgentToolbar() {
         </div>
       )}
 
+      {error && <div style={s.error}>{error}</div>}
+
       {/* Timer */}
       <div style={s.timer}>
         <span style={{ fontSize: 20, fontWeight: 800, color: T.text, fontVariantNumeric: 'tabular-nums' }}>
@@ -139,4 +148,5 @@ const s = {
   dropItem: { display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 12px', border: 'none', cursor: 'pointer', transition: 'background 0.1s' },
   reasonWrap: { display: 'flex', flexDirection: 'column', gap: 4 },
   timer: { textAlign: 'center', paddingTop: 4 },
+  error: { fontSize: 11, color: '#ef4444', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 6, padding: '5px 8px', textAlign: 'center' },
 };

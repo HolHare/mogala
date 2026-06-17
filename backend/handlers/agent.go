@@ -216,9 +216,12 @@ func UpdateDispositionCode(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		db.Exec(`UPDATE disposition_codes SET code=?, label=?, category=?, active=?
+		if _, err := db.Exec(`UPDATE disposition_codes SET code=?, label=?, category=?, active=?
 			WHERE id=? AND tenant_id=?`,
-			req.Code, req.Label, req.Category, req.Active, id, claims.TenantID)
+			req.Code, req.Label, req.Category, req.Active, id, claims.TenantID); err != nil {
+			jsonError(w, "Failed to update disposition code", http.StatusInternalServerError)
+			return
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"message": "Updated"})
@@ -234,7 +237,14 @@ func DeleteDispositionCode(db *sql.DB) http.HandlerFunc {
 		}
 
 		id := r.URL.Query().Get("id")
-		db.Exec("DELETE FROM disposition_codes WHERE id = ? AND tenant_id = ?", id, claims.TenantID)
+		if id == "" {
+			jsonError(w, "id is required", http.StatusBadRequest)
+			return
+		}
+		if _, err := db.Exec("DELETE FROM disposition_codes WHERE id = ? AND tenant_id = ?", id, claims.TenantID); err != nil {
+			jsonError(w, "Failed to delete disposition code", http.StatusInternalServerError)
+			return
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"message": "Deleted"})

@@ -32,7 +32,11 @@ func Register(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req RegisterRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request", http.StatusBadRequest)
+			jsonError(w, "Invalid request", http.StatusBadRequest)
+			return
+		}
+		if req.Domain == "" || req.Email == "" || req.Password == "" {
+			jsonError(w, "Domain, email and password are required", http.StatusBadRequest)
 			return
 		}
 
@@ -44,7 +48,7 @@ func Register(db *sql.DB) http.HandlerFunc {
 			tenantID, req.CompanyName, req.Domain,
 		)
 		if err != nil {
-			http.Error(w, "Domain already taken", http.StatusConflict)
+			jsonError(w, "Domain already taken", http.StatusConflict)
 			return
 		}
 
@@ -55,7 +59,7 @@ func Register(db *sql.DB) http.HandlerFunc {
 			userID, tenantID, req.Email, string(hash), req.FirstName, req.LastName,
 		)
 		if err != nil {
-			http.Error(w, "Email already exists", http.StatusConflict)
+			jsonError(w, "Email already exists", http.StatusConflict)
 			return
 		}
 
@@ -68,7 +72,7 @@ func Login(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req LoginRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request", http.StatusBadRequest)
+			jsonError(w, "Invalid request", http.StatusBadRequest)
 			return
 		}
 
@@ -94,12 +98,12 @@ func Login(db *sql.DB) http.HandlerFunc {
 		}
 
 		if err != nil {
-			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+			jsonError(w, "Invalid credentials", http.StatusUnauthorized)
 			return
 		}
 
 		if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)); err != nil {
-			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+			jsonError(w, "Invalid credentials", http.StatusUnauthorized)
 			return
 		}
 
@@ -108,7 +112,7 @@ func Login(db *sql.DB) http.HandlerFunc {
 			var suspended bool
 			db.QueryRow("SELECT suspended FROM tenants WHERE id = ?", tenantID).Scan(&suspended)
 			if suspended {
-				http.Error(w, "Account suspended", http.StatusForbidden)
+				jsonError(w, "Account suspended", http.StatusForbidden)
 				return
 			}
 		}
