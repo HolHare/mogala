@@ -93,7 +93,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
-          source: "docker-compose.yml"
+          source: "docker-compose.yml,adminer/"
           target: "/home/${{ secrets.VPS_USER }}/mogala"
 
       - name: Deploy to VPS via SSH
