@@ -71,6 +71,14 @@ jobs:
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/${{ github.event.repository.name }}/asterisk:latest
 
+      - name: Build and push Adminer
+        uses: docker/build-push-action@v5
+        timeout-minutes: 10
+        with:
+          context: ./adminer
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/${{ github.event.repository.name }}/adminer:latest
+
       - name: Notify build failure
         if: failure()
         run: |
