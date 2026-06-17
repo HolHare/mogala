@@ -128,6 +128,22 @@ jobs:
 
             docker-compose pull
             docker-compose up -d --remove-orphans
+
+            # Wait for MySQL to be ready
+            echo "Waiting for MySQL..."
+            for i in $(seq 1 30); do
+              docker exec mogala-mysql mysqladmin ping -uroot -p"${{ secrets.MYSQL_ROOT_PASSWORD }}" --silent 2>/dev/null && break
+              sleep 2
+            done
+
+            # Sync passwords to match .env secrets
+            docker exec mogala-mysql mysql -uroot -p"${{ secrets.MYSQL_ROOT_PASSWORD }}" -e "
+              ALTER USER 'root'@'%' IDENTIFIED BY '${{ secrets.MYSQL_ROOT_PASSWORD }}';
+              ALTER USER 'root'@'localhost' IDENTIFIED BY '${{ secrets.MYSQL_ROOT_PASSWORD }}';
+              ALTER USER 'mogala_user'@'%' IDENTIFIED BY '${{ secrets.MYSQL_PASSWORD }}';
+              FLUSH PRIVILEGES;
+            " 2>/dev/null || true
+
             docker-compose ps
 
       - name: Notify deploy failure
