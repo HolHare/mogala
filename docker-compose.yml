@@ -107,8 +107,7 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
-    volumes:
-      - ./adminer/php-custom.ini:/usr/local/etc/php/conf.d/custom.ini:ro
+    command: ["php", "-d", "mysqlnd.get_server_public_key=On", "-S", "[::]:8080", "-t", "/var/www/html"]
     environment:
       ADMINER_DEFAULT_SERVER: mogala-mysql
     depends_on:
