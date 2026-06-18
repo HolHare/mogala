@@ -1,28 +1,23 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { request } from '../api';
 import { T } from '../theme';
 
-export default function Login() {
-  const [form, setForm] = useState({ domain: '', email: '', password: '' });
+export default function ForgotPassword() {
+  const [form, setForm] = useState({ email: '', domain: '' });
+  const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
-  const [unverifiedCode, setUnverifiedCode] = useState('');
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
 
   const submit = async (e) => {
-    e?.preventDefault();
-    setError(''); setUnverifiedCode(''); setLoading(true);
-    const data = await request('/auth/login', { method: 'POST', body: JSON.stringify(form) });
+    e.preventDefault();
+    setError(''); setMsg(''); setLoading(true);
+    const data = await request('/auth/forgot-password', { method: 'POST', body: JSON.stringify(form) });
     setLoading(false);
-    if (data.token) {
-      localStorage.setItem('token', data.token);
-      navigate('/dashboard');
-    } else if (data.code === 'EMAIL_NOT_VERIFIED' || data.code === 'PHONE_NOT_VERIFIED') {
-      setUnverifiedCode(data.code);
-      setError(data.error);
+    if (data.message) {
+      setMsg(data.message);
     } else {
-      setError(data.error || 'Invalid domain, email or password');
+      setError(data.error || 'Something went wrong. Try again.');
     }
   };
 
@@ -34,47 +29,31 @@ export default function Login() {
           <div style={s.logoMark}>M</div>
           <span style={s.logoText}>Mogala</span>
         </div>
-        <h2 style={s.heading}>Welcome back</h2>
-        <p style={s.sub}>Sign in to your workspace</p>
+        <h2 style={s.heading}>Reset your password</h2>
+        <p style={s.sub}>Enter your email and we'll send a reset link. Leave domain blank if you're a super admin.</p>
 
         <div style={s.fieldGroup}>
-          <label style={s.label}>Company Domain <span style={{ color: T.textMuted, fontWeight: 400 }}>(leave blank for super admin)</span></label>
+          <label style={s.label}>Domain <span style={{ color: T.textMuted, fontWeight: 400 }}>(leave blank for super admin)</span></label>
           <input style={s.input} placeholder="e.g. acme"
             value={form.domain} onChange={e => setForm({ ...form, domain: e.target.value })} />
         </div>
         <div style={s.fieldGroup}>
           <label style={s.label}>Email address</label>
-          <input style={s.input} type="email" placeholder="you@company.com"
+          <input style={s.input} type="email" placeholder="you@company.com" required
             value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
         </div>
-        <div style={s.fieldGroup}>
-          <label style={s.label}>Password</label>
-          <input style={s.input} type="password" placeholder="••••••••"
-            value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
-        </div>
 
-        {error && (
-          <div style={s.errorBox}>
-            {error}
-            {unverifiedCode && (
-              <div style={{ marginTop: 6 }}>
-                <Link to="/register" style={{ color: T.error, fontWeight: 600, fontSize: 12 }}>
-                  Complete verification →
-                </Link>
-              </div>
-            )}
-          </div>
+        {error && <div style={s.errorBox}>{error}</div>}
+        {msg && <div style={s.successBox}>{msg}</div>}
+
+        {!msg && (
+          <button type="submit" style={s.btn} disabled={loading}>
+            {loading ? <span className="spin" style={s.spinner} /> : null}
+            {loading ? 'Sending…' : 'Send reset link'}
+          </button>
         )}
-
-        <button type="submit" style={s.btn} disabled={loading}>
-          {loading ? <span className="spin" style={s.spinner} /> : null}
-          {loading ? 'Signing in…' : 'Sign in'}
-        </button>
-        <div style={{ textAlign: 'right', marginTop: 10 }}>
-          <Link to="/forgot-password" style={{ fontSize: 13, color: T.textMuted }}>Forgot password?</Link>
-        </div>
         <p style={s.foot}>
-          No account? <Link to="/register" style={{ color: T.primaryHov }}>Create one</Link>
+          <Link to="/" style={{ color: T.primaryHov }}>← Back to sign in</Link>
         </p>
       </form>
     </div>
@@ -98,9 +77,7 @@ const s = {
     background: 'rgba(17,17,36,0.9)',
     border: '1px solid rgba(255,255,255,0.08)',
     backdropFilter: 'blur(20px)',
-    borderRadius: 16,
-    padding: '40px 36px',
-    width: 400,
+    borderRadius: 16, padding: '40px 36px', width: 400,
     boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
     position: 'relative', zIndex: 1,
   },
@@ -113,8 +90,8 @@ const s = {
     boxShadow: '0 4px 12px rgba(99,102,241,0.4)',
   },
   logoText: { fontSize: 20, fontWeight: 700, color: T.text },
-  heading: { margin: '0 0 4px', fontSize: 24, fontWeight: 700, color: T.text },
-  sub: { margin: '0 0 28px', fontSize: 14, color: T.textSub },
+  heading: { margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: T.text },
+  sub: { margin: '0 0 24px', fontSize: 13, color: T.textSub, lineHeight: 1.5 },
   fieldGroup: { marginBottom: 16 },
   label: { display: 'block', fontSize: 13, fontWeight: 500, color: T.textSub, marginBottom: 6 },
   input: {
@@ -124,8 +101,11 @@ const s = {
   },
   errorBox: {
     background: T.errorDim, border: '1px solid rgba(239,68,68,0.25)',
-    color: T.error, borderRadius: 8, padding: '10px 14px',
-    fontSize: 13, marginBottom: 16,
+    color: T.error, borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 16,
+  },
+  successBox: {
+    background: T.successDim, border: '1px solid rgba(34,197,94,0.25)',
+    color: T.success, borderRadius: 8, padding: '10px 14px', fontSize: 13, marginBottom: 16,
   },
   btn: {
     width: '100%', padding: 13, marginTop: 4,
@@ -134,7 +114,6 @@ const s = {
     fontSize: 15, fontWeight: 600, cursor: 'pointer',
     boxShadow: '0 4px 16px rgba(99,102,241,0.35)',
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-    transition: 'opacity 0.15s',
   },
   spinner: { width: 16, height: 16, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block' },
   foot: { textAlign: 'center', marginTop: 20, fontSize: 13, color: T.textMuted },

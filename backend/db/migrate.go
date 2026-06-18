@@ -159,11 +159,42 @@ func Migrate(db *sql.DB) {
 		}
 	}
 
+	// New tables for auth features
+	authTables := []string{
+		`CREATE TABLE IF NOT EXISTS otp_tokens (
+			id CHAR(36) PRIMARY KEY,
+			user_id CHAR(36) NOT NULL,
+			type ENUM('email','phone') NOT NULL,
+			otp CHAR(6) NOT NULL,
+			expires_at TIMESTAMP NOT NULL,
+			used BOOLEAN NOT NULL DEFAULT FALSE,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+		)`,
+		`CREATE TABLE IF NOT EXISTS password_reset_tokens (
+			id CHAR(36) PRIMARY KEY,
+			user_id CHAR(36) NOT NULL,
+			token CHAR(64) NOT NULL UNIQUE,
+			expires_at TIMESTAMP NOT NULL,
+			used BOOLEAN NOT NULL DEFAULT FALSE,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+		)`,
+	}
+	for _, q := range authTables {
+		if _, err := db.Exec(q); err != nil {
+			log.Printf("Migration warning (auth tables): %v", err)
+		}
+	}
+
 	// ALTER TABLE for existing deployments that already have these tables without the new columns
 	alterQueries := []string{
 		`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS suspended BOOLEAN NOT NULL DEFAULT FALSE`,
 		`ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS agent_id CHAR(36) NULL`,
 		`ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS disposition_code_id CHAR(36) NULL`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(20)`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT TRUE`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN NOT NULL DEFAULT TRUE`,
 	}
 	for _, q := range alterQueries {
 		if _, err := db.Exec(q); err != nil {

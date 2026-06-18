@@ -115,6 +115,11 @@ jobs:
             MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
             JWT_SECRET=${{ secrets.JWT_SECRET }}
             EXTERNAL_IP=${{ secrets.VPS_IP }}
+            SUPERADMIN_EMAIL=${{ secrets.SUPERADMIN_EMAIL }}
+            SUPERADMIN_PASSWORD=${{ secrets.SUPERADMIN_PASSWORD }}
+            SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }}
+            SENDGRID_FROM_EMAIL=${{ secrets.SENDGRID_FROM_EMAIL }}
+            PHONE_OTP_WEBHOOK_URL=${{ secrets.PHONE_OTP_WEBHOOK_URL }}
             ENVEOF
             sed -i 's/^ *//' .env
 

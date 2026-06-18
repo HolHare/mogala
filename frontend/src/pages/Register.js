@@ -4,58 +4,193 @@ import { request } from '../api';
 import { T } from '../theme';
 
 export default function Register() {
-  const [form, setForm] = useState({ first_name: '', last_name: '', company_name: '', domain: '', email: '', password: '' });
-  const [msg, setMsg] = useState('');
+  const [step, setStep] = useState(1);
+  const [userId, setUserId] = useState('');
+  const [form, setForm] = useState({ first_name: '', last_name: '', company_name: '', domain: '', email: '', phone: '', password: '' });
+  const [otp, setOtp] = useState('');
+  const [phoneSent, setPhoneSent] = useState(false);
   const [error, setError] = useState('');
+  const [msg, setMsg] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const submit = async (e) => {
+  const f = (key) => ({ value: form[key], onChange: e => setForm({ ...form, [key]: e.target.value }) });
+
+  const submitForm = async (e) => {
     e?.preventDefault();
-    setError(''); setMsg(''); setLoading(true);
+    setError(''); setLoading(true);
     const data = await request('/auth/register', { method: 'POST', body: JSON.stringify(form) });
     setLoading(false);
-    if (data.message) {
-      setMsg('Account created! Redirecting…');
-      setTimeout(() => navigate('/'), 2000);
+    if (data.user_id) {
+      setUserId(data.user_id);
+      setStep(2);
     } else {
       setError(data.error || 'Registration failed. Domain may already be taken.');
     }
   };
 
-  const f = (key) => ({ value: form[key], onChange: e => setForm({ ...form, [key]: e.target.value }) });
+  const verifyEmail = async (e) => {
+    e?.preventDefault();
+    setError(''); setLoading(true);
+    const data = await request('/auth/verify-email', { method: 'POST', body: JSON.stringify({ user_id: userId, otp }) });
+    setLoading(false);
+    if (data.verified) {
+      setOtp('');
+      setStep(3);
+    } else {
+      setError(data.error || 'Invalid code. Try again.');
+    }
+  };
+
+  const resendEmailOTP = async () => {
+    setError(''); setMsg(''); setLoading(true);
+    await request('/auth/resend-email-otp', { method: 'POST', body: JSON.stringify({ user_id: userId }) });
+    setLoading(false);
+    setMsg('New code sent — check your inbox.');
+  };
+
+  const sendPhoneOTP = async () => {
+    setError(''); setLoading(true);
+    const data = await request('/auth/send-phone-otp', { method: 'POST', body: JSON.stringify({ user_id: userId }) });
+    setLoading(false);
+    if (data.sent) {
+      setPhoneSent(true);
+    } else {
+      setError(data.error || 'Failed to send code.');
+    }
+  };
+
+  const verifyPhone = async (e) => {
+    e?.preventDefault();
+    setError(''); setLoading(true);
+    const data = await request('/auth/verify-phone', { method: 'POST', body: JSON.stringify({ user_id: userId, otp }) });
+    setLoading(false);
+    if (data.verified) {
+      setMsg('All verified! Redirecting to sign in…');
+      setTimeout(() => navigate('/'), 2000);
+    } else {
+      setError(data.error || 'Invalid code. Try again.');
+    }
+  };
 
   return (
     <div style={s.page}>
       <div style={s.glow} />
-      <form style={s.card} onSubmit={submit} className="fade-up">
+      <div style={s.card} className="fade-up">
         <div style={s.brand}>
           <div style={s.logoMark}>M</div>
           <span style={s.logoText}>Mogala</span>
         </div>
-        <h2 style={s.heading}>Create your workspace</h2>
-        <p style={s.sub}>Start your free VoIP account today</p>
 
-        <div style={s.row2}>
-          <Field label="First name" placeholder="Alice" {...f('first_name')} />
-          <Field label="Last name" placeholder="Smith" {...f('last_name')} />
-        </div>
-        <Field label="Company name" placeholder="Acme Corp" {...f('company_name')} />
-        <Field label="Domain" placeholder="acme  (used to sign in)" {...f('domain')} />
-        <Field label="Work email" type="email" placeholder="alice@acme.com" {...f('email')} />
-        <Field label="Password" type="password" placeholder="Min 8 characters" {...f('password')} />
+        {step === 1 && (
+          <form onSubmit={submitForm}>
+            <h2 style={s.heading}>Create your workspace</h2>
+            <p style={s.sub}>Start your free VoIP account today</p>
+            <div style={s.row2}>
+              <Field label="First name" placeholder="Alice" {...f('first_name')} />
+              <Field label="Last name" placeholder="Smith" {...f('last_name')} />
+            </div>
+            <Field label="Company name" placeholder="Acme Corp" {...f('company_name')} />
+            <Field label="Domain" placeholder="acme  (used to sign in)" {...f('domain')} />
+            <Field label="Work email" type="email" placeholder="alice@acme.com" {...f('email')} />
+            <Field label="Phone number" type="tel" placeholder="+27 82 123 4567" {...f('phone')} />
+            <Field label="Password" type="password" placeholder="Min 8 characters" {...f('password')} />
+            {error && <div style={s.errorBox}>{error}</div>}
+            <button type="submit" style={s.btn} disabled={loading}>
+              {loading ? <span className="spin" style={s.spinner} /> : null}
+              {loading ? 'Creating account…' : 'Create account'}
+            </button>
+            <p style={s.foot}>Already have an account? <Link to="/" style={{ color: T.primaryHov }}>Sign in</Link></p>
+          </form>
+        )}
 
-        {error && <div style={s.errorBox}>{error}</div>}
-        {msg && <div style={s.successBox}>{msg}</div>}
+        {step === 2 && (
+          <form onSubmit={verifyEmail}>
+            <h2 style={s.heading}>Verify your email</h2>
+            <p style={s.sub}>We sent a 6-digit code to <strong style={{ color: T.text }}>{form.email}</strong>. Enter it below.</p>
+            <OTPInput value={otp} onChange={setOtp} />
+            {error && <div style={s.errorBox}>{error}</div>}
+            {msg && <div style={s.successBox}>{msg}</div>}
+            <button type="submit" style={s.btn} disabled={loading || otp.length !== 6}>
+              {loading ? <span className="spin" style={s.spinner} /> : null}
+              {loading ? 'Verifying…' : 'Verify email'}
+            </button>
+            <p style={s.foot}>
+              Didn't get it?{' '}
+              <button type="button" onClick={resendEmailOTP} style={s.linkBtn} disabled={loading}>Resend code</button>
+            </p>
+          </form>
+        )}
 
-        <button type="submit" style={s.btn} disabled={loading}>
-          {loading ? <span className="spin" style={s.spinner} /> : null}
-          {loading ? 'Creating account…' : 'Create account'}
-        </button>
-        <p style={s.foot}>
-          Already have an account? <Link to="/" style={{ color: T.primaryHov }}>Sign in</Link>
-        </p>
-      </form>
+        {step === 3 && (
+          <form onSubmit={phoneSent ? verifyPhone : undefined}>
+            <h2 style={s.heading}>Verify your phone</h2>
+            {!phoneSent ? (
+              <>
+                <p style={s.sub}>We'll send a verification code to <strong style={{ color: T.text }}>{form.phone}</strong>.</p>
+                {error && <div style={s.errorBox}>{error}</div>}
+                <button type="button" style={s.btn} onClick={sendPhoneOTP} disabled={loading}>
+                  {loading ? <span className="spin" style={s.spinner} /> : null}
+                  {loading ? 'Sending…' : 'Send verification code'}
+                </button>
+              </>
+            ) : (
+              <>
+                <p style={s.sub}>Enter the 6-digit code sent to <strong style={{ color: T.text }}>{form.phone}</strong>.</p>
+                <OTPInput value={otp} onChange={setOtp} />
+                {error && <div style={s.errorBox}>{error}</div>}
+                {msg && <div style={s.successBox}>{msg}</div>}
+                <button type="submit" style={s.btn} disabled={loading || otp.length !== 6}>
+                  {loading ? <span className="spin" style={s.spinner} /> : null}
+                  {loading ? 'Verifying…' : 'Verify phone'}
+                </button>
+                <p style={s.foot}>
+                  Didn't get it?{' '}
+                  <button type="button" onClick={sendPhoneOTP} style={s.linkBtn} disabled={loading}>Resend code</button>
+                </p>
+              </>
+            )}
+          </form>
+        )}
+
+        <StepDots step={step} />
+      </div>
+    </div>
+  );
+}
+
+function OTPInput({ value, onChange }) {
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <input
+        type="text"
+        inputMode="numeric"
+        maxLength={6}
+        placeholder="••••••"
+        value={value}
+        onChange={e => onChange(e.target.value.replace(/\D/g, '').slice(0, 6))}
+        style={{
+          width: '100%', padding: '16px 14px', borderRadius: 8, fontSize: 28,
+          fontWeight: 700, letterSpacing: 12, textAlign: 'center',
+          background: T.surface, border: `2px solid ${T.primary}`,
+          color: T.text, outline: 'none', boxSizing: 'border-box',
+        }}
+        autoFocus
+      />
+    </div>
+  );
+}
+
+function StepDots({ step }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 24 }}>
+      {[1, 2, 3].map(n => (
+        <div key={n} style={{
+          width: n === step ? 20 : 8, height: 8, borderRadius: 4,
+          background: n <= step ? T.primary : 'rgba(255,255,255,0.15)',
+          transition: 'all 0.3s',
+        }} />
+      ))}
     </div>
   );
 }
@@ -123,5 +258,6 @@ const s = {
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
   },
   spinner: { width: 16, height: 16, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block' },
-  foot: { textAlign: 'center', marginTop: 20, fontSize: 13, color: T.textMuted },
+  foot: { textAlign: 'center', marginTop: 16, fontSize: 13, color: T.textMuted },
+  linkBtn: { background: 'none', border: 'none', color: T.primaryHov, cursor: 'pointer', fontSize: 13, padding: 0 },
 };

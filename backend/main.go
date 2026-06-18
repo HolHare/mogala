@@ -37,6 +37,12 @@ func main() {
 
 	r.HandleFunc("/auth/register", handlers.Register(database)).Methods("POST", "OPTIONS")
 	r.HandleFunc("/auth/login", handlers.Login(database)).Methods("POST", "OPTIONS")
+	r.HandleFunc("/auth/verify-email", handlers.VerifyEmail(database)).Methods("POST", "OPTIONS")
+	r.HandleFunc("/auth/resend-email-otp", handlers.ResendEmailOTP(database)).Methods("POST", "OPTIONS")
+	r.HandleFunc("/auth/send-phone-otp", handlers.SendPhoneOTP(database)).Methods("POST", "OPTIONS")
+	r.HandleFunc("/auth/verify-phone", handlers.VerifyPhone(database)).Methods("POST", "OPTIONS")
+	r.HandleFunc("/auth/forgot-password", handlers.ForgotPassword(database)).Methods("POST", "OPTIONS")
+	r.HandleFunc("/auth/reset-password", handlers.ResetPassword(database)).Methods("POST", "OPTIONS")
 
 	protected := r.PathPrefix("/api").Subrouter()
 	protected.Use(middleware.JWTAuth)
