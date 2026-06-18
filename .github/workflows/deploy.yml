@@ -138,7 +138,7 @@ jobs:
               sleep 2
             done
 
-            # Find working root password then force-sync ALL passwords
+            # Find working root password — fall back to skip-grant-tables recovery
             echo "--- MySQL diagnostics ---"
             ROOT_CONNECTED=false
             ROOT_PW=""
@@ -151,7 +151,49 @@ jobs:
               ROOT_PW="${{ secrets.MYSQL_ROOT_PASSWORD }}"
               echo "Root: secret password matches"
             else
-              echo "ERROR: Cannot connect as root with any known password"
+              echo "Root: unknown password — running skip-grant-tables recovery"
+
+              # Stop MySQL, start a recovery instance on the same volume
+              docker stop mogala-mysql || true
+              docker rm -f mogala-mysql-recover 2>/dev/null || true
+              MYSQL_VOL=$(docker volume ls --format '{{.Name}}' | grep mysql_data | head -1)
+              echo "Using volume: $MYSQL_VOL"
+              docker run -d --name mogala-mysql-recover \
+                -v "${MYSQL_VOL}:/var/lib/mysql" \
+                mysql:8 --skip-grant-tables --skip-networking
+
+              # Wait for recovery instance to accept connections
+              for i in $(seq 1 30); do
+                docker exec mogala-mysql-recover mysql -uroot -e "SELECT 1;" 2>/dev/null && break
+                sleep 2
+              done
+
+              echo "Resetting root password via skip-grant-tables..."
+              docker exec mogala-mysql-recover mysql -uroot -e "
+                FLUSH PRIVILEGES;
+                ALTER USER 'root'@'localhost' IDENTIFIED BY '${{ secrets.MYSQL_ROOT_PASSWORD }}';
+                ALTER USER 'root'@'%' IDENTIFIED BY '${{ secrets.MYSQL_ROOT_PASSWORD }}';
+                FLUSH PRIVILEGES;
+              " 2>&1 && echo "Root reset OK" || echo "Root reset FAILED"
+
+              docker stop mogala-mysql-recover && docker rm mogala-mysql-recover
+              docker-compose up -d mysql
+
+              # Wait for MySQL to come back
+              for i in $(seq 1 30); do
+                docker exec -e MYSQL_PWD="${{ secrets.MYSQL_ROOT_PASSWORD }}" mogala-mysql \
+                  mysql -uroot -e "SELECT 1;" 2>/dev/null && break
+                sleep 2
+              done
+
+              if docker exec -e MYSQL_PWD="${{ secrets.MYSQL_ROOT_PASSWORD }}" mogala-mysql \
+                  mysql -uroot -e "SELECT 'root_recovered';" 2>/dev/null; then
+                ROOT_CONNECTED=true
+                ROOT_PW="${{ secrets.MYSQL_ROOT_PASSWORD }}"
+                echo "Root password recovery successful"
+              else
+                echo "ERROR: Root recovery failed — manual intervention needed"
+              fi
             fi
 
             if [ "$ROOT_CONNECTED" = "true" ]; then
@@ -166,19 +208,13 @@ jobs:
                 SELECT user, host, plugin FROM mysql.user WHERE user IN ('root','mogala_user');
               " 2>&1 && echo "Password sync OK" || echo "ERROR: password sync failed"
 
-              # Verify mogala_user via Unix socket
-              echo "--- Verifying mogala_user login (Unix socket) ---"
-              docker exec -e MYSQL_PWD="${{ secrets.MYSQL_PASSWORD }}" mogala-mysql \
-                mysql -umogala_user mogala -e "SELECT 'mogala_user_socket_OK';" 2>&1 \
-                && echo "Socket OK" || echo "Socket FAIL — password wrong"
-
-              # Prime caching_sha2_password TCP cache so Adminer works without RSA exchange
+              # Prime caching_sha2_password TCP cache so Adminer connects without RSA
               echo "--- Priming TCP cache for Adminer ---"
               docker exec -e MYSQL_PWD="${{ secrets.MYSQL_PASSWORD }}" mogala-mysql \
                 mysql -h127.0.0.1 -P3306 -umogala_user --get-server-public-key mogala \
                 -e "SELECT 'tcp_cache_primed';" 2>&1 \
-                && echo "TCP cache primed — Adminer should now connect" \
-                || echo "TCP cache prime FAILED — password wrong or RSA issue"
+                && echo "SUCCESS: Adminer should now connect with mogala_user / psalm51:12" \
+                || echo "FAIL: mogala_user still cannot connect — check logs above"
             fi
             echo "--- End diagnostics ---"
 
