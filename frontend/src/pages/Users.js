@@ -10,9 +10,10 @@ export default function Users() {
   const [extensions, setExtensions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
-  const [form, setForm] = useState({ email: '', password: '', first_name: '', last_name: '', role: 'agent' });
+  const [form, setForm] = useState({ email: '', first_name: '', last_name: '', role: 'agent' });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
+  const [resending, setResending] = useState(null);
 
   const load = () => {
     Promise.all([
@@ -24,16 +25,16 @@ export default function Users() {
   useEffect(() => { load(); }, []);
 
   const create = async () => {
-    if (!form.email || !form.password) { flash('Email and password required', 'error'); return; }
+    if (!form.email) { flash('Email is required', 'error'); return; }
     setSaving(true);
     const data = await request('/api/users', { method: 'POST', body: JSON.stringify(form) });
     setSaving(false);
     if (data.id) {
-      flash('User created successfully', 'success');
+      flash('Invite sent successfully', 'success');
       setModal(false);
-      setForm({ email: '', password: '', first_name: '', last_name: '', role: 'agent' });
+      setForm({ email: '', first_name: '', last_name: '', role: 'agent' });
       load();
-    } else flash(data.error || 'Failed to create user', 'error');
+    } else flash(data.error || 'Failed to send invite', 'error');
   };
 
   const remove = async (id) => {
@@ -52,6 +53,14 @@ export default function Users() {
     load();
   };
 
+  const resendInvite = async (userId) => {
+    setResending(userId);
+    const data = await request(`/api/users/resend-invite?id=${userId}`, { method: 'POST' });
+    setResending(null);
+    if (data.sent) flash('Invite resent', 'success');
+    else flash(data.error || 'Failed to resend invite', 'error');
+  };
+
   const flash = (text, type) => { setMsg({ text, type }); setTimeout(() => setMsg(null), 3500); };
 
   const userExt = (uid) => extensions.find(e => e.user_id === uid || e.assigned_to === uid);
@@ -67,7 +76,7 @@ export default function Users() {
           <p style={s.subtitle}>{users.length} team member{users.length !== 1 ? 's' : ''}</p>
         </div>
         <button style={T.btn_s('primary')} onClick={() => setModal(true)}>
-          <Icon name="plus" size={16} /> Add User
+          <Icon name="plus" size={16} /> Invite User
         </button>
       </div>
 
@@ -92,9 +101,14 @@ export default function Users() {
                         <div style={{ ...s.avatar, background: roleColor + '22', color: roleColor }}>
                           {(u.first_name?.[0] || u.email[0]).toUpperCase()}
                         </div>
-                        <span style={{ fontWeight: 500 }}>
-                          {u.first_name || u.last_name ? `${u.first_name} ${u.last_name}`.trim() : '—'}
-                        </span>
+                        <div>
+                          <div style={{ fontWeight: 500 }}>
+                            {u.first_name || u.last_name ? `${u.first_name} ${u.last_name}`.trim() : '—'}
+                          </div>
+                          {u.invite_pending && (
+                            <div style={s.pendingBadge}>Pending invite</div>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td style={{ ...s.td, color: T.textSub }}>{u.email}</td>
@@ -109,10 +123,18 @@ export default function Users() {
                         {extensions.map(e => <option key={e.id} value={e.id}>{e.extension}</option>)}
                       </select>
                     </td>
-                    <td style={s.td}>
-                      <button style={T.btn_s('danger')} onClick={() => remove(u.id)}>
-                        <Icon name="trash" size={14} /> Remove
-                      </button>
+                    <td style={{ ...s.td, textAlign: 'right' }}>
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                        {u.invite_pending && (
+                          <button style={T.btn_s('ghost')} onClick={() => resendInvite(u.id)} disabled={resending === u.id}>
+                            {resending === u.id ? <span className="spin" style={spinner} /> : <Icon name="envelope" size={14} />}
+                            Resend
+                          </button>
+                        )}
+                        <button style={T.btn_s('danger')} onClick={() => remove(u.id)}>
+                          <Icon name="trash" size={14} /> Remove
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -131,15 +153,17 @@ function Modal({ form, setForm, onSave, onClose, saving }) {
     <div style={overlay}>
       <div style={s.modal} className="slide-in">
         <div style={s.modalHeader}>
-          <h3 style={s.modalTitle}>Add User</h3>
+          <h3 style={s.modalTitle}>Invite User</h3>
           <button style={s.closeBtn} onClick={onClose}><Icon name="xMark" size={18} /></button>
         </div>
+        <p style={{ margin: '0 0 20px', fontSize: 13, color: T.textSub }}>
+          An invite email will be sent so they can set their own password.
+        </p>
         <div style={s.row2}>
           <Field label="First name" placeholder="Alice" {...f('first_name')} />
           <Field label="Last name" placeholder="Smith" {...f('last_name')} />
         </div>
         <Field label="Work email *" type="email" placeholder="alice@company.com" {...f('email')} />
-        <Field label="Password *" type="password" placeholder="Min 8 characters" {...f('password')} />
         <div style={{ marginBottom: 20 }}>
           <label style={s.label}>Role</label>
           <select style={{ ...T.input_s() }} value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}>
@@ -149,8 +173,8 @@ function Modal({ form, setForm, onSave, onClose, saving }) {
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <button style={T.btn_s('ghost')} onClick={onClose}>Cancel</button>
           <button style={T.btn_s('primary')} onClick={onSave} disabled={saving}>
-            {saving ? <span className="spin" style={spinner} /> : <Icon name="check" size={15} />}
-            {saving ? 'Creating…' : 'Create user'}
+            {saving ? <span className="spin" style={spinner} /> : <Icon name="envelope" size={15} />}
+            {saving ? 'Sending…' : 'Send invite'}
           </button>
         </div>
       </div>
@@ -174,7 +198,7 @@ function EmptyState() {
         <Icon name="users" size={26} color={T.primary} />
       </div>
       <p style={{ margin: '0 0 6px', fontWeight: 600, color: T.text, fontSize: 15 }}>No users yet</p>
-      <p style={{ margin: 0, color: T.textSub, fontSize: 14 }}>Add your first team member to get started</p>
+      <p style={{ margin: 0, color: T.textSub, fontSize: 14 }}>Invite your first team member to get started</p>
     </div>
   );
 }
@@ -201,9 +225,10 @@ const s = {
   tr: { borderBottom: '1px solid ' + T.border },
   td: { padding: '13px 16px', fontSize: 14, color: T.text },
   avatar: { width: 34, height: 34, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, flexShrink: 0 },
+  pendingBadge: { fontSize: 11, color: '#f59e0b', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 5, padding: '2px 7px', marginTop: 3, display: 'inline-block' },
   select: { padding: '7px 10px', borderRadius: 7, border: '1px solid ' + T.border, background: T.surface, color: T.text, fontSize: 13, cursor: 'pointer' },
   modal: { background: T.card, border: '1px solid ' + T.border, borderRadius: 16, padding: 28, width: 480, maxWidth: '90vw', boxShadow: '0 24px 64px rgba(0,0,0,0.6)' },
-  modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   modalTitle: { margin: 0, fontSize: 18, fontWeight: 700, color: T.text },
   closeBtn: { background: 'none', border: 'none', color: T.textSub, cursor: 'pointer', padding: 4 },
   row2: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 },

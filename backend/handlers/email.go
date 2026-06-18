@@ -83,6 +83,33 @@ func emailOTPTemplate(otp string) string {
 </html>`, otp)
 }
 
+func inviteEmailTemplate(inviteeName, adminName, companyName, role, inviteURL string) string {
+	greeting := "Hi there"
+	if inviteeName != "" {
+		greeting = "Hi " + inviteeName
+	}
+	return fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:0;background:#09090f;font-family:Arial,sans-serif">
+<div style="max-width:520px;margin:40px auto;background:#111124;border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:40px">
+  <div style="margin-bottom:28px">
+    <span style="display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;background:linear-gradient(135deg,#6366f1,#818cf8);border-radius:10px;font-size:22px;font-weight:800;color:#fff;vertical-align:middle">M</span>
+    <span style="font-size:20px;font-weight:700;color:#fff;margin-left:10px;vertical-align:middle">Mogala</span>
+  </div>
+  <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#fff">You're invited to %s</h2>
+  <p style="margin:0 0 20px;font-size:14px;color:#8b8ba7">%s, %s has invited you to join <strong style="color:#fff">%s</strong> on Mogala as a <strong style="color:#818cf8">%s</strong>.</p>
+  <p style="margin:0 0 28px;font-size:14px;color:#8b8ba7">Click the button below to accept your invitation and set up your account. This link expires in 7 days.</p>
+  <div style="text-align:center;margin:0 0 28px">
+    <a href="%s" style="display:inline-block;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:600">Accept Invitation</a>
+  </div>
+  <p style="margin:0 0 6px;font-size:12px;color:#555">Or copy this link:</p>
+  <p style="margin:0 0 24px;font-size:12px;color:#6366f1;word-break:break-all">%s</p>
+  <p style="margin:0;font-size:12px;color:#555">If you weren't expecting this invitation, you can safely ignore this email.</p>
+</div>
+</body>
+</html>`, companyName, greeting, adminName, companyName, role, inviteURL, inviteURL)
+}
+
 func passwordResetTemplate(resetURL string) string {
 	return fmt.Sprintf(`<!DOCTYPE html>
 <html>

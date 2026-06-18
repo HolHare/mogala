@@ -134,19 +134,19 @@ func Login(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)); err != nil {
-			jsonError(w, "Invalid credentials", http.StatusUnauthorized)
-			return
-		}
-
 		if !emailVerified {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
 			json.NewEncoder(w).Encode(map[string]string{
-				"error":   "Please verify your email before signing in.",
+				"error":   "Your account is pending — check your email for an invite or verification link.",
 				"code":    "EMAIL_NOT_VERIFIED",
 				"user_id": userID,
 			})
+			return
+		}
+
+		if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password)); err != nil {
+			jsonError(w, "Invalid credentials", http.StatusUnauthorized)
 			return
 		}
 
@@ -406,11 +406,82 @@ func ResetPassword(db *sql.DB) http.HandlerFunc {
 		}
 
 		hash, _ := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
-		db.Exec("UPDATE users SET password_hash = ? WHERE id = ?", string(hash), userID)
+		db.Exec("UPDATE users SET password_hash = ?, email_verified = TRUE WHERE id = ?", string(hash), userID)
 		db.Exec("UPDATE password_reset_tokens SET used = TRUE WHERE id = ?", tokenID)
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"message": "Password updated successfully"})
+	}
+}
+
+func InviteInfo(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token := r.URL.Query().Get("token")
+		w.Header().Set("Content-Type", "application/json")
+
+		var userID, email, firstName, lastName, role, companyName string
+		err := db.QueryRow(`
+			SELECT u.id, u.email, u.first_name, u.last_name, u.role, t.name
+			FROM password_reset_tokens prt
+			JOIN users u ON u.id = prt.user_id
+			JOIN tenants t ON t.id = u.tenant_id
+			WHERE prt.token = ? AND prt.used = FALSE AND prt.expires_at > NOW()`,
+			token,
+		).Scan(&userID, &email, &firstName, &lastName, &role, &companyName)
+
+		if err != nil {
+			json.NewEncoder(w).Encode(map[string]interface{}{"valid": false, "error": "Invalid or expired invite link"})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"valid":        true,
+			"email":        email,
+			"first_name":   firstName,
+			"last_name":    lastName,
+			"role":         role,
+			"company_name": companyName,
+		})
+	}
+}
+
+func AcceptInvite(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Token     string `json:"token"`
+			Password  string `json:"password"`
+			FirstName string `json:"first_name"`
+			LastName  string `json:"last_name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonError(w, "Invalid request", http.StatusBadRequest)
+			return
+		}
+		if len(req.Password) < 8 {
+			jsonError(w, "Password must be at least 8 characters", http.StatusBadRequest)
+			return
+		}
+
+		var tokenID, userID string
+		err := db.QueryRow(`
+			SELECT id, user_id FROM password_reset_tokens
+			WHERE token = ? AND used = FALSE AND expires_at > NOW()`,
+			req.Token,
+		).Scan(&tokenID, &userID)
+		if err != nil {
+			jsonError(w, "Invalid or expired invite link", http.StatusBadRequest)
+			return
+		}
+
+		hash, _ := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
+		db.Exec(`UPDATE users SET password_hash = ?, email_verified = TRUE,
+			first_name = CASE WHEN ? != '' THEN ? ELSE first_name END,
+			last_name  = CASE WHEN ? != '' THEN ? ELSE last_name  END
+			WHERE id = ?`,
+			string(hash), req.FirstName, req.FirstName, req.LastName, req.LastName, userID)
+		db.Exec("UPDATE password_reset_tokens SET used = TRUE WHERE id = ?", tokenID)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"message": "Account activated. You can now sign in."})
 	}
 }
 

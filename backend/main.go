@@ -43,6 +43,8 @@ func main() {
 	r.HandleFunc("/auth/verify-phone", handlers.VerifyPhone(database)).Methods("POST", "OPTIONS")
 	r.HandleFunc("/auth/forgot-password", handlers.ForgotPassword(database)).Methods("POST", "OPTIONS")
 	r.HandleFunc("/auth/reset-password", handlers.ResetPassword(database)).Methods("POST", "OPTIONS")
+	r.HandleFunc("/auth/invite-info", handlers.InviteInfo(database)).Methods("GET", "OPTIONS")
+	r.HandleFunc("/auth/accept-invite", handlers.AcceptInvite(database)).Methods("POST", "OPTIONS")
 
 	protected := r.PathPrefix("/api").Subrouter()
 	protected.Use(middleware.JWTAuth)
@@ -62,6 +64,7 @@ func main() {
 	protected.HandleFunc("/users", handlers.UpdateUser(database)).Methods("PUT", "OPTIONS")
 	protected.HandleFunc("/users/assign-extension", handlers.AssignExtension(database)).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/users/my-extension", handlers.GetUserExtension(database)).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/users/resend-invite", handlers.ResendInvite(database)).Methods("POST", "OPTIONS")
 
 	// Phone numbers
 	protected.HandleFunc("/phone-numbers", handlers.GetPhoneNumbers(database)).Methods("GET", "OPTIONS")
