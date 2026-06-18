@@ -166,12 +166,19 @@ jobs:
                 SELECT user, host, plugin FROM mysql.user WHERE user IN ('root','mogala_user');
               " 2>&1 && echo "Password sync OK" || echo "ERROR: password sync failed"
 
-              # Verify mogala_user can actually log in
-              echo "--- Verifying mogala_user login ---"
+              # Verify mogala_user via Unix socket
+              echo "--- Verifying mogala_user login (Unix socket) ---"
               docker exec -e MYSQL_PWD="${{ secrets.MYSQL_PASSWORD }}" mogala-mysql \
-                mysql -umogala_user mogala -e "SELECT 'mogala_user_login_OK';" 2>&1 \
-                && echo "SUCCESS: mogala_user can connect" \
-                || echo "FAIL: mogala_user still cannot connect"
+                mysql -umogala_user mogala -e "SELECT 'mogala_user_socket_OK';" 2>&1 \
+                && echo "Socket OK" || echo "Socket FAIL — password wrong"
+
+              # Prime caching_sha2_password TCP cache so Adminer works without RSA exchange
+              echo "--- Priming TCP cache for Adminer ---"
+              docker exec -e MYSQL_PWD="${{ secrets.MYSQL_PASSWORD }}" mogala-mysql \
+                mysql -h127.0.0.1 -P3306 -umogala_user --get-server-public-key mogala \
+                -e "SELECT 'tcp_cache_primed';" 2>&1 \
+                && echo "TCP cache primed — Adminer should now connect" \
+                || echo "TCP cache prime FAILED — password wrong or RSA issue"
             fi
             echo "--- End diagnostics ---"
 
