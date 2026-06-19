@@ -19,6 +19,7 @@ import SuperAdmin from './SuperAdmin';
 import Wallboard from './Wallboard';
 import DispositionCodes from './DispositionCodes';
 import Settings from './Settings';
+import Porting from './Porting';
 
 const NAV = [
   { section: 'OVERVIEW', items: [
@@ -36,7 +37,6 @@ const NAV = [
   ]},
   { section: 'ADMIN', adminOnly: true, items: [
     { key: 'users',      label: 'Users',                 icon: 'users' },
-    { key: 'trunks',     label: 'SIP Trunks',            icon: 'server' },
     { key: 'dispcodes',  label: 'Disposition Codes',     icon: 'list' },
   ]},
   { section: 'ACCOUNT', items: [
@@ -49,6 +49,8 @@ const NAV = [
 const SUPERADMIN_NAV = [
   { section: 'SUPER ADMIN', items: [
     { key: 'tenants',    label: 'Tenants',               icon: 'building' },
+    { key: 'trunks',     label: 'SIP Trunks',            icon: 'server' },
+    { key: 'porting',    label: 'Number Porting',        icon: 'arrowPath' },
     { key: 'settings',   label: 'Settings',              icon: 'cog' },
   ]},
 ];
@@ -240,6 +242,7 @@ export default function Dashboard() {
           {page === 'ringgroups' && <RingGroups />}
           {page === 'settings'   && <Settings />}
           {page === 'tenants'    && <SuperAdmin />}
+          {page === 'porting'    && <Porting />}
           {page === 'wallboard'  && <Wallboard />}
           {page === 'dispcodes'  && <DispositionCodes />}
         </div>

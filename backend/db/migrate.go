@@ -180,6 +180,19 @@ func Migrate(db *sql.DB) {
 		}
 	}
 
+	// Porting requests (superadmin-managed)
+	db.Exec(`CREATE TABLE IF NOT EXISTS number_portings (
+		id CHAR(36) PRIMARY KEY,
+		tenant_id CHAR(36) NOT NULL,
+		number VARCHAR(30) NOT NULL,
+		from_carrier VARCHAR(100) NOT NULL DEFAULT '',
+		status ENUM('pending','in_progress','completed','rejected') NOT NULL DEFAULT 'pending',
+		notes VARCHAR(2000) NOT NULL DEFAULT '',
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+		FOREIGN KEY (tenant_id) REFERENCES tenants(id)
+	)`)
+
 	// Auth tables
 	authTables := []string{
 		`CREATE TABLE IF NOT EXISTS otp_tokens (

@@ -92,6 +92,12 @@ func main() {
 	protected.HandleFunc("/admin/tenants/{id}/impersonate", handlers.ImpersonateTenant(database)).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/admin/tenants/{id}", handlers.UpdateTenant(database)).Methods("PATCH", "OPTIONS")
 
+	// Porting (superadmin only)
+	protected.HandleFunc("/admin/portings", handlers.GetPortings(database)).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/admin/portings", handlers.CreatePorting(database)).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/admin/portings/{id}", handlers.UpdatePorting(database)).Methods("PUT", "OPTIONS")
+	protected.HandleFunc("/admin/portings/{id}", handlers.DeletePorting(database)).Methods("DELETE", "OPTIONS")
+
 	// Disposition codes (admin CRUD)
 	protected.HandleFunc("/admin/disposition-codes", handlers.GetDispositionCodes(database)).Methods("GET", "OPTIONS")
 	protected.HandleFunc("/admin/disposition-codes", handlers.CreateDispositionCode(database)).Methods("POST", "OPTIONS")
