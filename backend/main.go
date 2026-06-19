@@ -50,6 +50,10 @@ func main() {
 	protected.Use(middleware.JWTAuth)
 
 	protected.HandleFunc("/me", handlers.Me(database)).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/me", handlers.UpdateProfile(database)).Methods("PUT", "OPTIONS")
+	protected.HandleFunc("/me/password", handlers.ChangePassword(database)).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/workspace", handlers.GetWorkspace(database)).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/workspace", handlers.UpdateWorkspace(database)).Methods("PUT", "OPTIONS")
 	protected.HandleFunc("/logout", handlers.Logout(database)).Methods("POST", "OPTIONS")
 
 	// Extensions

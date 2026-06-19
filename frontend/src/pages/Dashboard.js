@@ -18,6 +18,7 @@ import RingGroups from './RingGroups';
 import SuperAdmin from './SuperAdmin';
 import Wallboard from './Wallboard';
 import DispositionCodes from './DispositionCodes';
+import Settings from './Settings';
 
 const NAV = [
   { section: 'OVERVIEW', items: [
@@ -383,17 +384,6 @@ function DashboardHome({ setPage, role }) {
   );
 }
 
-function Settings() {
-  return (
-    <div style={{ ...T.card_s(), textAlign: 'center', padding: '80px 40px' }}>
-      <div style={{ width: 64, height: 64, borderRadius: 18, background: T.primaryDim, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-        <Icon name="cog" size={30} color={T.primary} />
-      </div>
-      <h3 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 700, color: T.text }}>Settings</h3>
-      <p style={{ margin: 0, color: T.textSub, fontSize: 14 }}>Tenant and account settings coming soon</p>
-    </div>
-  );
-}
 
 const s = {
   root: { display: 'flex', minHeight: '100vh', background: T.bg },
