@@ -2,47 +2,115 @@ package handlers
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/smtp"
 	"os"
+	"strings"
 )
 
+// sendEmail sends via SMTP if SMTP_HOST is set, SendGrid if SENDGRID_API_KEY is set,
+// or logs to stdout as a fallback (useful for development / missing email config).
 func sendEmail(to, subject, htmlBody string) error {
+	// --- SMTP path (Gmail, Outlook, any SMTP provider) ---
+	smtpHost := os.Getenv("SMTP_HOST")
+	if smtpHost != "" {
+		smtpPort := os.Getenv("SMTP_PORT")
+		if smtpPort == "" {
+			smtpPort = "587"
+		}
+		smtpUser := os.Getenv("SMTP_USER")
+		smtpPass := os.Getenv("SMTP_PASS")
+		fromEmail := os.Getenv("SMTP_FROM")
+		if fromEmail == "" {
+			fromEmail = smtpUser
+		}
+
+		addr := smtpHost + ":" + smtpPort
+		msg := "From: Mogala <" + fromEmail + ">\r\n" +
+			"To: " + to + "\r\n" +
+			"Subject: " + subject + "\r\n" +
+			"MIME-Version: 1.0\r\n" +
+			"Content-Type: text/html; charset=UTF-8\r\n" +
+			"\r\n" + htmlBody
+
+		var auth smtp.Auth
+		if smtpUser != "" && smtpPass != "" {
+			auth = smtp.PlainAuth("", smtpUser, smtpPass, smtpHost)
+		}
+
+		// Try STARTTLS (port 587) first; fall back to TLS (port 465)
+		if smtpPort == "465" {
+			tlsCfg := &tls.Config{ServerName: smtpHost}
+			conn, err := tls.Dial("tcp", addr, tlsCfg)
+			if err != nil {
+				return fmt.Errorf("smtp tls dial: %w", err)
+			}
+			c, err := smtp.NewClient(conn, smtpHost)
+			if err != nil {
+				return fmt.Errorf("smtp new client: %w", err)
+			}
+			defer c.Close()
+			if auth != nil {
+				if err = c.Auth(auth); err != nil {
+					return fmt.Errorf("smtp auth: %w", err)
+				}
+			}
+			if err = c.Mail(fromEmail); err != nil {
+				return err
+			}
+			if err = c.Rcpt(to); err != nil {
+				return err
+			}
+			w, err := c.Data()
+			if err != nil {
+				return err
+			}
+			if _, err = strings.NewReader(msg).WriteTo(w); err != nil {
+				return err
+			}
+			return w.Close()
+		}
+
+		return smtp.SendMail(addr, auth, fromEmail, []string{to}, []byte(msg))
+	}
+
+	// --- SendGrid path ---
 	apiKey := os.Getenv("SENDGRID_API_KEY")
 	fromEmail := os.Getenv("SENDGRID_FROM_EMAIL")
 	if fromEmail == "" {
 		fromEmail = "noreply@mogala.app"
 	}
-	if apiKey == "" {
-		fmt.Printf("[EMAIL] To: %s | Subject: %s\n%s\n", to, subject, htmlBody)
+	if apiKey != "" {
+		payload := map[string]interface{}{
+			"personalizations": []map[string]interface{}{
+				{"to": []map[string]string{{"email": to}}},
+			},
+			"from":    map[string]string{"email": fromEmail, "name": "Mogala"},
+			"subject": subject,
+			"content": []map[string]string{
+				{"type": "text/html", "value": htmlBody},
+			},
+		}
+		body, _ := json.Marshal(payload)
+		req, _ := http.NewRequest("POST", "https://api.sendgrid.com/v3/mail/send", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode >= 400 {
+			return fmt.Errorf("sendgrid returned %d", resp.StatusCode)
+		}
 		return nil
 	}
 
-	payload := map[string]interface{}{
-		"personalizations": []map[string]interface{}{
-			{"to": []map[string]string{{"email": to}}},
-		},
-		"from":    map[string]string{"email": fromEmail, "name": "Mogala"},
-		"subject": subject,
-		"content": []map[string]string{
-			{"type": "text/html", "value": htmlBody},
-		},
-	}
-
-	body, _ := json.Marshal(payload)
-	req, _ := http.NewRequest("POST", "https://api.sendgrid.com/v3/mail/send", bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
-		return fmt.Errorf("sendgrid returned %d", resp.StatusCode)
-	}
+	// --- Fallback: log to stdout (visible in docker logs mogala-backend) ---
+	fmt.Printf("[EMAIL] To: %s | Subject: %s\n%s\n", to, subject, htmlBody)
 	return nil
 }
 

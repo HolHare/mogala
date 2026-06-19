@@ -119,6 +119,11 @@ jobs:
             SUPERADMIN_PASSWORD=${{ secrets.SUPERADMIN_PASSWORD }}
             SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }}
             SENDGRID_FROM_EMAIL=${{ secrets.SENDGRID_FROM_EMAIL }}
+            SMTP_HOST=${{ secrets.SMTP_HOST }}
+            SMTP_PORT=${{ secrets.SMTP_PORT }}
+            SMTP_USER=${{ secrets.SMTP_USER }}
+            SMTP_PASS=${{ secrets.SMTP_PASS }}
+            SMTP_FROM=${{ secrets.SMTP_FROM }}
             PHONE_OTP_WEBHOOK_URL=${{ secrets.PHONE_OTP_WEBHOOK_URL }}
             ENVEOF
             sed -i 's/^ *//' .env

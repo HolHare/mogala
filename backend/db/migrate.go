@@ -2,8 +2,29 @@ package db
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 )
+
+// addColumnIfMissing is a MySQL-compatible replacement for ADD COLUMN IF NOT EXISTS (MariaDB-only syntax).
+func addColumnIfMissing(db *sql.DB, table, column, definition string) {
+	var dbName string
+	db.QueryRow("SELECT DATABASE()").Scan(&dbName)
+
+	var count int
+	db.QueryRow(`SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+		WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+		dbName, table, column).Scan(&count)
+
+	if count == 0 {
+		q := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, definition)
+		if _, err := db.Exec(q); err != nil {
+			log.Printf("Migration warning (alter %s.%s): %v", table, column, err)
+		} else {
+			log.Printf("Migration: added column %s.%s", table, column)
+		}
+	}
+}
 
 func Migrate(db *sql.DB) {
 	queries := []string{
@@ -86,7 +107,6 @@ func Migrate(db *sql.DB) {
 			CONSTRAINT ver_name_idx UNIQUE (table_name)
 		)`,
 		`INSERT IGNORE INTO version (table_name, table_version) VALUES ('location', 9)`,
-		// Phase 2: call center agent tables (after tenants/users are guaranteed to exist)
 		`CREATE TABLE IF NOT EXISTS agent_statuses (
 			user_id CHAR(36) NOT NULL,
 			tenant_id CHAR(36) NOT NULL,
@@ -107,12 +127,13 @@ func Migrate(db *sql.DB) {
 			FOREIGN KEY (tenant_id) REFERENCES tenants(id),
 			UNIQUE KEY unique_code_per_tenant (tenant_id, code)
 		)`,
+		// notes uses VARCHAR so MySQL allows a default value (TEXT does not)
 		`CREATE TABLE IF NOT EXISTS call_dispositions (
 			id CHAR(36) PRIMARY KEY,
 			call_log_id INT NULL,
 			agent_id CHAR(36) NOT NULL,
 			disposition_code_id CHAR(36) NOT NULL,
-			notes TEXT NOT NULL DEFAULT '',
+			notes VARCHAR(2000) NOT NULL DEFAULT '',
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE TABLE IF NOT EXISTS agent_shifts (
@@ -159,7 +180,7 @@ func Migrate(db *sql.DB) {
 		}
 	}
 
-	// New tables for auth features
+	// Auth tables
 	authTables := []string{
 		`CREATE TABLE IF NOT EXISTS otp_tokens (
 			id CHAR(36) PRIMARY KEY,
@@ -187,20 +208,13 @@ func Migrate(db *sql.DB) {
 		}
 	}
 
-	// ALTER TABLE for existing deployments that already have these tables without the new columns
-	alterQueries := []string{
-		`ALTER TABLE tenants ADD COLUMN IF NOT EXISTS suspended BOOLEAN NOT NULL DEFAULT FALSE`,
-		`ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS agent_id CHAR(36) NULL`,
-		`ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS disposition_code_id CHAR(36) NULL`,
-		`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(20)`,
-		`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT TRUE`,
-		`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN NOT NULL DEFAULT TRUE`,
-	}
-	for _, q := range alterQueries {
-		if _, err := db.Exec(q); err != nil {
-			log.Printf("Migration warning (alter): %v", err)
-		}
-	}
+	// Add columns to existing tables — uses INFORMATION_SCHEMA check (MySQL 8 compatible)
+	addColumnIfMissing(db, "tenants", "suspended", "BOOLEAN NOT NULL DEFAULT FALSE")
+	addColumnIfMissing(db, "call_logs", "agent_id", "CHAR(36) NULL")
+	addColumnIfMissing(db, "call_logs", "disposition_code_id", "CHAR(36) NULL")
+	addColumnIfMissing(db, "users", "phone", "VARCHAR(20)")
+	addColumnIfMissing(db, "users", "email_verified", "BOOLEAN NOT NULL DEFAULT TRUE")
+	addColumnIfMissing(db, "users", "phone_verified", "BOOLEAN NOT NULL DEFAULT TRUE")
 
 	log.Println("Migrations applied successfully")
 }
