@@ -180,6 +180,47 @@ func Migrate(db *sql.DB) {
 		}
 	}
 
+	// KYC / RICA compliance
+	db.Exec(`CREATE TABLE IF NOT EXISTS kyc_submissions (
+		id CHAR(36) PRIMARY KEY,
+		tenant_id CHAR(36) NOT NULL UNIQUE,
+		entity_type ENUM('individual','business') NOT NULL DEFAULT 'individual',
+		first_name VARCHAR(100) NOT NULL DEFAULT '',
+		last_name VARCHAR(100) NOT NULL DEFAULT '',
+		id_type ENUM('sa_id','passport','foreign_id') NOT NULL DEFAULT 'sa_id',
+		id_number VARCHAR(50) NOT NULL DEFAULT '',
+		date_of_birth VARCHAR(20) NOT NULL DEFAULT '',
+		nationality VARCHAR(80) NOT NULL DEFAULT 'South African',
+		company_name VARCHAR(255) NOT NULL DEFAULT '',
+		reg_number VARCHAR(100) NOT NULL DEFAULT '',
+		vat_number VARCHAR(50) NOT NULL DEFAULT '',
+		auth_rep_name VARCHAR(255) NOT NULL DEFAULT '',
+		auth_rep_id VARCHAR(50) NOT NULL DEFAULT '',
+		address_street VARCHAR(255) NOT NULL DEFAULT '',
+		address_suburb VARCHAR(100) NOT NULL DEFAULT '',
+		address_city VARCHAR(100) NOT NULL DEFAULT '',
+		address_province VARCHAR(100) NOT NULL DEFAULT '',
+		address_postal VARCHAR(10) NOT NULL DEFAULT '',
+		address_country VARCHAR(100) NOT NULL DEFAULT 'South Africa',
+		status ENUM('draft','pending','approved','rejected') NOT NULL DEFAULT 'draft',
+		reviewer_notes VARCHAR(2000) NOT NULL DEFAULT '',
+		submitted_at TIMESTAMP NULL,
+		reviewed_at TIMESTAMP NULL,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+		FOREIGN KEY (tenant_id) REFERENCES tenants(id)
+	)`)
+	db.Exec(`CREATE TABLE IF NOT EXISTS kyc_documents (
+		id CHAR(36) PRIMARY KEY,
+		kyc_id CHAR(36) NOT NULL,
+		doc_type VARCHAR(50) NOT NULL,
+		filename VARCHAR(255) NOT NULL,
+		mime_type VARCHAR(50) NOT NULL DEFAULT 'application/octet-stream',
+		data MEDIUMTEXT NOT NULL,
+		uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (kyc_id) REFERENCES kyc_submissions(id) ON DELETE CASCADE
+	)`)
+
 	// Porting requests (superadmin-managed)
 	db.Exec(`CREATE TABLE IF NOT EXISTS number_portings (
 		id CHAR(36) PRIMARY KEY,
@@ -223,6 +264,7 @@ func Migrate(db *sql.DB) {
 
 	// Add columns to existing tables — uses INFORMATION_SCHEMA check (MySQL 8 compatible)
 	addColumnIfMissing(db, "tenants", "suspended", "BOOLEAN NOT NULL DEFAULT FALSE")
+	addColumnIfMissing(db, "tenants", "kyc_status", "ENUM('unverified','pending','approved','rejected') NOT NULL DEFAULT 'unverified'")
 	addColumnIfMissing(db, "call_logs", "agent_id", "CHAR(36) NULL")
 	addColumnIfMissing(db, "call_logs", "disposition_code_id", "CHAR(36) NULL")
 	addColumnIfMissing(db, "users", "phone", "VARCHAR(20)")

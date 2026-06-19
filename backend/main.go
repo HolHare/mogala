@@ -92,6 +92,18 @@ func main() {
 	protected.HandleFunc("/admin/tenants/{id}/impersonate", handlers.ImpersonateTenant(database)).Methods("POST", "OPTIONS")
 	protected.HandleFunc("/admin/tenants/{id}", handlers.UpdateTenant(database)).Methods("PATCH", "OPTIONS")
 
+	// KYC / RICA
+	protected.HandleFunc("/kyc", handlers.GetKYC(database)).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/kyc", handlers.SaveKYC(database)).Methods("PUT", "OPTIONS")
+	protected.HandleFunc("/kyc/submit", handlers.SubmitKYC(database)).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/kyc/documents", handlers.UploadKYCDocument(database)).Methods("POST", "OPTIONS")
+	protected.HandleFunc("/kyc/documents/{id}", handlers.DeleteKYCDocument(database)).Methods("DELETE", "OPTIONS")
+
+	// KYC admin review
+	protected.HandleFunc("/admin/kyc", handlers.AdminListKYC(database)).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/admin/kyc/{id}", handlers.AdminGetKYC(database)).Methods("GET", "OPTIONS")
+	protected.HandleFunc("/admin/kyc/{id}", handlers.AdminReviewKYC(database)).Methods("PATCH", "OPTIONS")
+
 	// Porting (superadmin only)
 	protected.HandleFunc("/admin/portings", handlers.GetPortings(database)).Methods("GET", "OPTIONS")
 	protected.HandleFunc("/admin/portings", handlers.CreatePorting(database)).Methods("POST", "OPTIONS")

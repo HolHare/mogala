@@ -20,6 +20,8 @@ import Wallboard from './Wallboard';
 import DispositionCodes from './DispositionCodes';
 import Settings from './Settings';
 import Porting from './Porting';
+import KYC from './KYC';
+import AdminKYC from './AdminKYC';
 
 const NAV = [
   { section: 'OVERVIEW', items: [
@@ -40,6 +42,7 @@ const NAV = [
     { key: 'dispcodes',  label: 'Disposition Codes',     icon: 'list' },
   ]},
   { section: 'ACCOUNT', items: [
+    { key: 'kyc',        label: 'KYC / RICA',            icon: 'shield' },
     { key: 'billing',    label: 'Billing',               icon: 'creditCard' },
     { key: 'settings',   label: 'Settings',              icon: 'cog' },
   ]},
@@ -51,6 +54,7 @@ const SUPERADMIN_NAV = [
     { key: 'tenants',    label: 'Tenants',               icon: 'building' },
     { key: 'trunks',     label: 'SIP Trunks',            icon: 'server' },
     { key: 'porting',    label: 'Number Porting',        icon: 'arrowPath' },
+    { key: 'adminkyc',  label: 'KYC / RICA',            icon: 'shield' },
     { key: 'settings',   label: 'Settings',              icon: 'cog' },
   ]},
 ];
@@ -243,6 +247,8 @@ export default function Dashboard() {
           {page === 'settings'   && <Settings />}
           {page === 'tenants'    && <SuperAdmin />}
           {page === 'porting'    && <Porting />}
+          {page === 'kyc'        && <KYC />}
+          {page === 'adminkyc'   && <AdminKYC />}
           {page === 'wallboard'  && <Wallboard />}
           {page === 'dispcodes'  && <DispositionCodes />}
         </div>
