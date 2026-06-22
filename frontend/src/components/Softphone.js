@@ -44,22 +44,27 @@ export default function Softphone({ extension, sipPassword, onRegistered, onCall
 
     ua.delegate = {
       onInvite: (inv) => {
-        setCallSt(`Incoming: ${inv.remoteIdentity.uri.user}`);
-        sessRef.current = inv;
-        // Send 180 Ringing so the caller sees the ring state
-        inv.progress().catch(() => {});
-        let established = false;
-        inv.stateChange.addListener(st => {
-          if (st === SessionState.Established) {
-            established = true;
-            setInCall(true);
-            attachAudio(inv, audioRef.current);
-          }
-          if (st === SessionState.Terminated) {
-            setInCall(false); setCallSt(''); sessRef.current = null;
-            if (established) onCallEnded?.();
-          }
-        });
+        try {
+          const caller = inv.remoteIdentity?.uri?.user ?? 'Unknown';
+          setCallSt(`Incoming: ${caller}`);
+          sessRef.current = inv;
+          // Send 180 Ringing so the caller sees the ring state
+          inv.progress().catch(e => console.warn('SIP 180 failed:', e));
+          let established = false;
+          inv.stateChange.addListener(st => {
+            if (st === SessionState.Established) {
+              established = true;
+              setInCall(true);
+              attachAudio(inv, audioRef.current);
+            }
+            if (st === SessionState.Terminated) {
+              setInCall(false); setCallSt(''); sessRef.current = null;
+              if (established) onCallEnded?.();
+            }
+          });
+        } catch (e) {
+          console.error('onInvite error:', e);
+        }
       },
     };
 
@@ -77,7 +82,7 @@ export default function Softphone({ extension, sipPassword, onRegistered, onCall
   }, [extension, sipPassword]);
 
   const call = () => {
-    if (!dial || !uaRef.current) return;
+    if (!dial || !uaRef.current || sessRef.current) return;
     const inv = new Inviter(uaRef.current, UserAgent.makeURI(`sip:${dial}@${SIP_DOMAIN}`), {
       sessionDescriptionHandlerOptions: {
         constraints: { audio: true, video: false },
@@ -109,16 +114,20 @@ export default function Softphone({ extension, sipPassword, onRegistered, onCall
   const answer = () => {
     const s = sessRef.current;
     if (!s) return;
-    s.accept({
-      sessionDescriptionHandlerOptions: {
-        constraints: { audio: true, video: false },
-        peerConnectionConfiguration: ICE,
-      },
-    }).catch(err => {
-      console.error('accept failed:', err);
-      setCallSt('Answer failed');
-      setTimeout(() => setCallSt(''), 3000);
-    });
+    try {
+      s.accept({
+        sessionDescriptionHandlerOptions: {
+          constraints: { audio: true, video: false },
+          peerConnectionConfiguration: ICE,
+        },
+      }).catch(err => {
+        console.error('accept failed:', err);
+        setCallSt('Answer failed — check microphone permission');
+        setTimeout(() => setCallSt(''), 4000);
+      });
+    } catch (e) {
+      console.error('accept sync error:', e);
+    }
   };
 
   const hangup = () => {
