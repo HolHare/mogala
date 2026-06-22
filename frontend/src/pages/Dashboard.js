@@ -22,6 +22,7 @@ import Settings from './Settings';
 import Porting from './Porting';
 import KYC from './KYC';
 import AdminKYC from './AdminKYC';
+import DialPlans from './DialPlans';
 
 const NAV = [
   { section: 'OVERVIEW', items: [
@@ -39,6 +40,8 @@ const NAV = [
   ]},
   { section: 'ADMIN', adminOnly: true, items: [
     { key: 'users',      label: 'Users',                 icon: 'users' },
+    { key: 'trunks',     label: 'SIP Trunks',            icon: 'server' },
+    { key: 'dialplans',  label: 'Dial Plans',            icon: 'route' },
     { key: 'dispcodes',  label: 'Disposition Codes',     icon: 'list' },
   ]},
   { section: 'ACCOUNT', items: [
@@ -251,6 +254,7 @@ export default function Dashboard() {
           {page === 'adminkyc'   && <AdminKYC />}
           {page === 'wallboard'  && <Wallboard />}
           {page === 'dispcodes'  && <DispositionCodes />}
+          {page === 'dialplans'  && <DialPlans />}
         </div>
       </div>
 

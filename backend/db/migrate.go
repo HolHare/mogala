@@ -262,6 +262,34 @@ func Migrate(db *sql.DB) {
 		}
 	}
 
+	// Dial plans + rules
+	db.Exec(`CREATE TABLE IF NOT EXISTS dial_plans (
+		id CHAR(36) PRIMARY KEY,
+		tenant_id CHAR(36) NOT NULL,
+		name VARCHAR(100) NOT NULL,
+		description VARCHAR(500) NOT NULL DEFAULT '',
+		active BOOLEAN NOT NULL DEFAULT TRUE,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+		UNIQUE KEY unique_plan_name_per_tenant (tenant_id, name)
+	)`)
+	db.Exec(`CREATE TABLE IF NOT EXISTS dial_plan_rules (
+		id CHAR(36) PRIMARY KEY,
+		dial_plan_id CHAR(36) NOT NULL,
+		tenant_id CHAR(36) NOT NULL,
+		name VARCHAR(100) NOT NULL DEFAULT '',
+		pattern VARCHAR(50) NOT NULL,
+		trunk_id CHAR(36) NOT NULL,
+		priority INT NOT NULL DEFAULT 10,
+		strip_digits INT NOT NULL DEFAULT 0,
+		prepend VARCHAR(20) NOT NULL DEFAULT '',
+		active BOOLEAN NOT NULL DEFAULT TRUE,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (dial_plan_id) REFERENCES dial_plans(id) ON DELETE CASCADE,
+		FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+		FOREIGN KEY (trunk_id) REFERENCES sip_trunks(id)
+	)`)
+
 	// Add columns to existing tables — uses INFORMATION_SCHEMA check (MySQL 8 compatible)
 	addColumnIfMissing(db, "tenants", "suspended", "BOOLEAN NOT NULL DEFAULT FALSE")
 	addColumnIfMissing(db, "tenants", "kyc_status", "ENUM('unverified','pending','approved','rejected') NOT NULL DEFAULT 'unverified'")
